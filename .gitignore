@@ -4,3 +4,5 @@ out/
 target/
 test/
 *.iml
+server_directory/
+client_directory/

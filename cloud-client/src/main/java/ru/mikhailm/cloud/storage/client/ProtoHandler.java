@@ -8,6 +8,7 @@ import ru.mikhailm.cloud.storage.common.ProtoFileSender;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -140,7 +141,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 if (buf.readableBytes() >= nextLength) {
                     byte[] fileName = new byte[nextLength];
                     buf.readBytes(fileName);
-                    System.out.println("STATE: Filename received - _" + new String(fileName, "UTF-8"));
+                    System.out.println("STATE: Filename received - _" + new String(fileName, StandardCharsets.UTF_8));
                     out = new BufferedOutputStream(new FileOutputStream("client_directory\\" + new String(fileName)));
                     currentState = State.FILE_LENGTH;
                 }

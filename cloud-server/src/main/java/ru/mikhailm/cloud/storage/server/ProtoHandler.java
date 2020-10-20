@@ -2,11 +2,8 @@ package ru.mikhailm.cloud.storage.server;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
 import ru.mikhailm.cloud.storage.common.ProtoFileSender;
 
 import java.io.BufferedOutputStream;
@@ -68,7 +65,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 if (buf.readableBytes() >= nextLength) {
                     byte[] fileName = new byte[nextLength];
                     buf.readBytes(fileName);
-                    System.out.println("STATE: Filename received - _" + new String(fileName, "UTF-8"));
+                    System.out.println("STATE: Filename received - _" + new String(fileName, StandardCharsets.UTF_8));
                     out = new BufferedOutputStream(new FileOutputStream("server_directory\\" + new String(fileName)));
                     currentState = State.FILE_LENGTH;
                 }
@@ -151,12 +148,12 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
 
         //Проходимся по всем файлам и отправляем длину имени, имя и размер файла
         for (Path file : files) {
+            byte[] filenameBytes = file.getFileName().toString().getBytes(StandardCharsets.UTF_8);
             outBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
-            outBuf.writeInt(file.getFileName().toString().length());
+            outBuf.writeInt(filenameBytes.length);
             ctx.writeAndFlush(outBuf);
             System.out.println(file.getFileName().toString().length());
 
-            byte[] filenameBytes = file.getFileName().toString().getBytes(StandardCharsets.UTF_8);
             outBuf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
             outBuf.writeBytes(filenameBytes);
             ctx.writeAndFlush(outBuf);
