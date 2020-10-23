@@ -3,7 +3,6 @@ package ru.mikhailm.cloud.storage.client;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
-import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -16,7 +15,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.List;
 
-public class Controller {
+public class ClientController {
     private Main main;
 
     @FXML
@@ -32,8 +31,12 @@ public class Controller {
         this.main = main;
     }
 
+    public Main getMain() {
+        return main;
+    }
+
     //Обработка нажатия кнопки "Отправить"
-    public void send(ActionEvent actionEvent) throws IOException {
+    public void send() throws IOException {
         //Открываем диалоговое окно выбора файла
         FileChooser fileChooser = new FileChooser();
         File file = fileChooser.showOpenDialog(main.getPrimaryStage());
@@ -50,11 +53,10 @@ public class Controller {
         }
     }
 
-    public void initialize() {
-        new Thread(() -> {
-            Network.getInstance().setController(this);
-            Network.getInstance().start();
-        }).start();
+    @FXML
+    private void initialize() {
+        Network.getInstance().setClientController(this);
+        ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel());
 
         //Настраиваем TableView
         fileNameColumn.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getName()));
@@ -71,15 +73,16 @@ public class Controller {
         Network.getInstance().stop();
         Platform.exit();
     }
+
     //Обработка нажатия кнопки "Скачать"
-    public void download(ActionEvent actionEvent) {
+    public void download() {
         FileInfo fileInfo = filesTable.getSelectionModel().getSelectedItem();
         if (fileInfo != null) {
             ProtoFileSender.sendRequestFileDownload(fileInfo.getName(), Network.getInstance().getCurrentChannel());
         }
     }
 
-    public void update(ActionEvent actionEvent) {
+    public void update() {
         ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel());
     }
 }

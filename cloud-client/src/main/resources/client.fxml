@@ -7,7 +7,7 @@
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.geometry.Insets?>
-<HBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="ru.mikhailm.cloud.storage.client.Controller">
+<HBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="ru.mikhailm.cloud.storage.client.ClientController">
     <VBox>
         <Button  text="Отправить" onAction="#send"/>
         <Button text="Скачать" onAction="#download"/>

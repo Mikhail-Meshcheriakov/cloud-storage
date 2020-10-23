@@ -3,8 +3,10 @@ package ru.mikhailm.cloud.storage.client;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import ru.mikhailm.cloud.storage.common.CommandCode;
 import ru.mikhailm.cloud.storage.common.FileInfo;
-import ru.mikhailm.cloud.storage.common.ProtoFileSender;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -30,7 +32,6 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private Controller controller;
     private State currentState = State.IDLE;
     private int nextLength;
     private long fileLength;
@@ -41,31 +42,32 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     private int counter;
     private byte[] fileName;
 
-    public ProtoHandler(Controller controller) {
-        this.controller = controller;
-    }
-
-    @Override
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        ProtoFileSender.updateFileList(ctx.channel());
-    }
-
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         ByteBuf buf = (ByteBuf) msg;
+        ClientController clientController = Network.getInstance().getClientController();
         while (buf.readableBytes() > 0) {
             if (currentState == State.IDLE) {
                 byte readed = buf.readByte();
                 System.out.println(readed);
                 switch (readed) {
-                    case 25:     //Получение файла
+                    case CommandCode.FILE:   //Получение файла
                         currentState = State.NAME_LENGTH;
                         receivedFileLength = 0L;
                         System.out.println("STATE: Start file receiving");
                         break;
-                    case 62:     //Получение списка файлов с сервера
+                    case CommandCode.FILE_LIST:     //Получение списка файлов с сервера
                         currentState = State.FILE_LIST;
                         System.out.println("STATE: File list request");
+                        break;
+                    case CommandCode.FILE_SUCCESS:
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                            alert.setTitle("");
+                            alert.setHeaderText(null);
+                            alert.setContentText("Файл успешно загружен");
+                            alert.show();
+                        });
                         break;
                     default:
                         System.out.println("ERROR: Invalid first byte - " + readed);
@@ -77,11 +79,10 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 if (State.FILE_LIST.getNumberOperation() == 0)
                     if (buf.readableBytes() >= 4) {
                         countFiles = buf.readInt();
-                        System.out.println("countFiles: " + countFiles);
                         State.FILE_LIST.setNumberOperation(1);
 
                         if (countFiles == 0) {
-                            controller.updateList(fileList);
+                            clientController.updateList(fileList);
                             currentState = State.IDLE;
                             State.FILE_LIST.setNumberOperation(0);
                         }
@@ -93,7 +94,6 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                         if (buf.readableBytes() >= 4) {
                             nextLength = buf.readInt();
                             State.FILE_LIST.setNumberOperation(2);
-                            System.out.println("nextLength: " + nextLength);
                         }
                     }
                     //Получаем имя файла
@@ -102,7 +102,6 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                             fileName = new byte[nextLength];
                             buf.readBytes(fileName);
                             State.FILE_LIST.setNumberOperation(3);
-                            System.out.println("fileName: " + new String(fileName));
                         }
                     }
                     //Получаем размер файла
@@ -113,11 +112,10 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                             fileList.add(new FileInfo(new String(fileName), fileSize));
                             counter++;
                             State.FILE_LIST.setNumberOperation(1);
-                            System.out.println("fileSize: " + fileSize);
 
                             if (counter == countFiles) {
                                 //Обновляем список файлов на клиенте
-                                controller.updateList(fileList);
+                                clientController.updateList(fileList);
                                 counter = 0;
                                 fileList.clear();
                                 State.FILE_LIST.setNumberOperation(0);
@@ -175,7 +173,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         cause.printStackTrace();
         ctx.close();
     }

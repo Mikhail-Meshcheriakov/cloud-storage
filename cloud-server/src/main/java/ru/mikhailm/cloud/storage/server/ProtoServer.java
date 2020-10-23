@@ -18,11 +18,10 @@ public class ProtoServer {
                     .channel(NioServerSocketChannel.class)
                     .childHandler(new ChannelInitializer<SocketChannel>() { // (4)
                         @Override
-                        public void initChannel(SocketChannel ch) throws Exception {
-                            ch.pipeline().addLast(new ProtoHandler());
+                        public void initChannel(SocketChannel ch) {
+                            ch.pipeline().addLast(new AuthHandler());
                         }
                     });
-                    // .childOption(ChannelOption.SO_KEEPALIVE, true);
             ChannelFuture f = b.bind(8189).sync();
             f.channel().closeFuture().sync();
         } finally {
