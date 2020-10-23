@@ -12,7 +12,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import java.net.InetSocketAddress;
 
 public class Network {
-    private Controller controller;
+    private ClientController clientController;
+    private AuthorizationController authorizationController;
 
     private static Network ourInstance = new Network();
 
@@ -29,8 +30,16 @@ public class Network {
         return currentChannel;
     }
 
-    public void setController(Controller controller) {
-        this.controller = controller;
+    public void setClientController(ClientController clientController) {
+        this.clientController = clientController;
+    }
+
+    public ClientController getClientController() {
+        return clientController;
+    }
+
+    public void setAuthorizationController(AuthorizationController authorizationController) {
+        this.authorizationController = authorizationController;
     }
 
     public void start() {
@@ -41,8 +50,8 @@ public class Network {
                     .channel(NioSocketChannel.class)
                     .remoteAddress(new InetSocketAddress("localhost", 8189))
                     .handler(new ChannelInitializer<SocketChannel>() {
-                        protected void initChannel(SocketChannel socketChannel) throws Exception {
-                            socketChannel.pipeline().addLast(new ProtoHandler(controller));
+                        protected void initChannel(SocketChannel socketChannel) {
+                            socketChannel.pipeline().addLast(new AuthorizationHandler(authorizationController));
                             currentChannel = socketChannel;
                         }
                     });

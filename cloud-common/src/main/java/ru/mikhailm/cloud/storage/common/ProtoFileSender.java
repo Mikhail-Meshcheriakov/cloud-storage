@@ -15,7 +15,7 @@ public class ProtoFileSender {
 
         ByteBuf buf;
         buf = ByteBufAllocator.DEFAULT.directBuffer(1);
-        buf.writeByte((byte) 25);
+        buf.writeByte(CommandCode.FILE);
         channel.writeAndFlush(buf);
 
         byte[] filenameBytes = path.getFileName().toString().getBytes(StandardCharsets.UTF_8);
@@ -43,7 +43,7 @@ public class ProtoFileSender {
 
         //Отправка сигнального байта команды
         buf = ByteBufAllocator.DEFAULT.directBuffer(1);
-        buf.writeByte((byte) 52);
+        buf.writeByte(CommandCode.REQUEST_FILE);
         channel.writeAndFlush(buf);
 
         //Отправка длины имени файла
@@ -60,7 +60,7 @@ public class ProtoFileSender {
 
     public static void updateFileList(Channel channel) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.directBuffer(1);
-        buf.writeByte((byte) 26);
+        buf.writeByte(CommandCode.REQUEST_FILE_LIST);
         channel.writeAndFlush(buf);
     }
 }
