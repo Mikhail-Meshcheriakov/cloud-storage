@@ -20,20 +20,21 @@ import static ru.mikhailm.cloud.storage.common.CommandCode.*;
 
 public class ProtoHandler extends ChannelInboundHandlerAdapter {
 
-    private final String user;
     private State currentState = State.IDLE;
     private int nextLength;
     private long fileLength;
     private long receivedFileLength;
     private BufferedOutputStream out;
+    private Path source;
+    private String userDirectory;
 
     public ProtoHandler(String user) {
-        this.user = user;
+        userDirectory = Paths.get("D:", "server_storage", user).toString();
 
         //Проверка каталога пользователя
-        if (!Files.exists(Paths.get(user))) {
+        if (!Files.exists(Paths.get("D:", "server_storage", user))) {
             try {
-                Files.createDirectories(Paths.get(user));
+                Files.createDirectories(Paths.get("D:", "server_storage", user));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -49,7 +50,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 System.out.println(commandCode);
                 switch (commandCode) {
                     case FILE:       //Получение файла
-                        currentState = State.NAME_LENGTH;
+                        currentState = State.FILE;
                         receivedFileLength = 0L;
                         System.out.println("STATE: Start file receiving");
                         break;
@@ -58,96 +59,190 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                         sendFileList(ctx);
                         break;
                     case REQUEST_FILE:       //Запрос на отправку файла
-                        currentState = State.REQUEST_FILE_DOWNLOAD_1;
+                        currentState = State.REQUEST_FILE_DOWNLOAD;
                         System.out.println("STATE: File download request");
+                        break;
+                    case REQUEST_FILE_RENAME:
+                        currentState = State.REQUEST_FILE_RENAME;
+                        System.out.println("STATE: File rename request");
+                        break;
+                    case REQUEST_FILE_DELETE:
+                        currentState = State.REQUEST_FILE_DELETE;
+                        System.out.println("STATE: File delete request");
                         break;
                     default:
                         System.out.println("ERROR: Invalid first byte - " + commandCode);
                 }
             }
 
-            if (currentState == State.NAME_LENGTH) {
-                if (buf.readableBytes() >= 4) {
-                    System.out.println("STATE: Get filename length");
-                    nextLength = buf.readInt();
-                    currentState = State.NAME;
-                }
-            }
-
-            if (currentState == State.NAME) {
-                if (buf.readableBytes() >= nextLength) {
-                    byte[] fileName = new byte[nextLength];
-                    buf.readBytes(fileName);
-                    System.out.println("STATE: Filename received - _" + new String(fileName, StandardCharsets.UTF_8));
-                    out = new BufferedOutputStream(new FileOutputStream(user + "\\" + new String(fileName)));
-                    currentState = State.FILE_LENGTH;
-                }
-            }
-
-            //TODO: реализовать обработку файлов с нулевым размером
-            if (currentState == State.FILE_LENGTH) {
-                if (buf.readableBytes() >= 8) {
-                    fileLength = buf.readLong();
-                    System.out.println("STATE: File length received - " + fileLength);
-                    currentState = State.FILE;
-                }
-            }
-
             if (currentState == State.FILE) {
-                while (buf.readableBytes() > 0) {
-                    byte b = buf.readByte();
-                    out.write(b);
-                    receivedFileLength++;
-                    if (fileLength == receivedFileLength) {
-                        currentState = State.IDLE;
-                        System.out.println("File received");
-                        out.close();
-
-                        //Отправляем клиенту команду об успешной загрузке файла
-                        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
-                        byteBuf.writeByte(FILE_SUCCESS);
-                        ctx.writeAndFlush(byteBuf);
-
-                        sendFileList(ctx);  //После завершения загрузки файла отправля обновленный список файлов на клиент
-                        break;
-                    }
-                }
+                file(ctx, buf);
             }
 
             //Получаем длину имени файла
-            if (currentState == State.REQUEST_FILE_DOWNLOAD_1) {
-                if (buf.readableBytes() >= 4) {
-                    nextLength = buf.readInt();
-                    currentState = State.REQUEST_FILE_DOWNLOAD_2;
-                }
-            }
-            //Получаем имя файла и отправляем его клиенту
-            if (currentState == State.REQUEST_FILE_DOWNLOAD_2) {
-                if (buf.readableBytes() >= nextLength) {
-                    byte[] fileName = new byte[nextLength];
-                    buf.readBytes(fileName);
-                    ProtoFileSender.sendFile(Paths.get(user, new String(fileName)), ctx.channel(), channelFuture -> {
-                        if (!channelFuture.isSuccess()) {
-                            channelFuture.cause().printStackTrace();
-                        }
-                        if (channelFuture.isSuccess()) {
-                            System.out.println("Файл успешно передан");
-                        }
-                    });
-                    currentState = State.IDLE;
-                }
+            if (currentState == State.REQUEST_FILE_DOWNLOAD) {
+                fileDownload(ctx, buf);
             }
 
+            if (currentState == State.REQUEST_FILE_RENAME) {
+                fileRename(ctx, buf);
+            }
+
+            if (currentState == State.REQUEST_FILE_DELETE) {
+                fileDelete(ctx, buf);
+            }
         }
+
         if (buf.readableBytes() == 0) {
             buf.release();
         }
+    }
 
+    private void fileDelete(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+        if (currentState.getNumberOperation() == 0) {
+            if (buf.readableBytes() >= 4) {
+                nextLength = buf.readInt();
+                currentState.setNumberOperation(1);
+            }
+        }
+
+        if (currentState.getNumberOperation() == 1) {
+            if (buf.readableBytes() >= nextLength) {
+                byte[] fileName = new byte[nextLength];
+                buf.readBytes(fileName);
+                Files.deleteIfExists(Paths.get(userDirectory, new String(fileName, StandardCharsets.UTF_8)));
+                currentState.setNumberOperation(0);
+                currentState = State.IDLE;
+                sendFileList(ctx);
+            }
+        }
+    }
+
+    private void fileRename(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+
+        if (currentState.getNumberOperation() == 0) {
+            if (buf.readableBytes() >= 4) {
+                nextLength = buf.readInt();
+                currentState.setNumberOperation(1);
+            }
+        }
+
+        if (currentState.getNumberOperation() == 1) {
+            if (buf.readableBytes() >= nextLength) {
+                byte[] fileName = new byte[nextLength];
+                buf.readBytes(fileName);
+                source = Paths.get(userDirectory, new String(fileName, StandardCharsets.UTF_8));
+                currentState.setNumberOperation(2);
+            }
+        }
+
+        if (currentState.getNumberOperation() == 2) {
+            if (buf.readableBytes() >= 4) {
+                nextLength = buf.readInt();
+                currentState.setNumberOperation(3);
+            }
+        }
+
+        if (currentState.getNumberOperation() == 3) {
+            if (buf.readableBytes() >= nextLength) {
+                byte[] fileName = new byte[nextLength];
+                buf.readBytes(fileName);
+                String newName = new String(fileName, StandardCharsets.UTF_8);
+                Files.move(source, source.resolveSibling(newName));
+                currentState.setNumberOperation(0);
+                currentState = State.IDLE;
+                sendFileList(ctx);
+            }
+        }
+    }
+
+    private void fileDownload(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+        if (currentState.getNumberOperation() == 0) {
+            if (buf.readableBytes() >= 4) {
+                nextLength = buf.readInt();
+                currentState.setNumberOperation(1);
+            }
+        }
+        //Получаем имя файла и отправляем его клиенту
+        if (currentState.getNumberOperation() == 1) {
+            if (buf.readableBytes() >= nextLength) {
+                byte[] fileName = new byte[nextLength];
+                buf.readBytes(fileName);
+                ProtoFileSender.sendFile(Paths.get(userDirectory, new String(fileName)), ctx.channel(), channelFuture -> {
+                    if (!channelFuture.isSuccess()) {
+                        channelFuture.cause().printStackTrace();
+                    }
+                    if (channelFuture.isSuccess()) {
+                        System.out.println("Файл успешно передан");
+                    }
+                });
+                currentState.setNumberOperation(0);
+                currentState = State.IDLE;
+            }
+        }
+    }
+
+    private void file(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+        if (currentState.getNumberOperation() == 0) {
+            if (buf.readableBytes() >= 4) {
+                System.out.println("STATE: Get filename length");
+                nextLength = buf.readInt();
+                currentState.setNumberOperation(1);
+            }
+        }
+
+        if (currentState.getNumberOperation() == 1) {
+            if (buf.readableBytes() >= nextLength) {
+                byte[] fileName = new byte[nextLength];
+                buf.readBytes(fileName);
+                System.out.println("STATE: Filename received - _" + new String(fileName, StandardCharsets.UTF_8));
+                out = new BufferedOutputStream(new FileOutputStream(userDirectory + "\\" + new String(fileName)));
+                currentState.setNumberOperation(2);
+            }
+        }
+
+        if (currentState.getNumberOperation() == 2) {
+            if (buf.readableBytes() >= 8) {
+                fileLength = buf.readLong();
+                System.out.println("STATE: File length received - " + fileLength);
+                if (fileLength == 0) {
+                    currentState.setNumberOperation(0);
+                    currentState = State.IDLE;
+                    System.out.println("File received");
+                    out.close();
+                    sendFileList(ctx);
+                } else {
+                    currentState.setNumberOperation(3);
+                }
+            }
+        }
+
+        if (currentState.getNumberOperation() == 3) {
+            while (buf.readableBytes() > 0) {
+                byte b = buf.readByte();
+                out.write(b);
+                receivedFileLength++;
+                if (fileLength == receivedFileLength) {
+                    currentState.setNumberOperation(0);
+                    currentState = State.IDLE;
+                    System.out.println("File received");
+                    out.close();
+
+                    //Отправляем клиенту команду об успешной загрузке файла
+                    ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
+                    byteBuf.writeByte(FILE_SUCCESS);
+                    ctx.writeAndFlush(byteBuf);
+
+                    sendFileList(ctx);  //После завершения загрузки файла отправля обновленный список файлов на клиент
+                    break;
+                }
+            }
+        }
     }
 
     //Метод для отправки списка файлов на клиент
     private void sendFileList(ChannelHandlerContext ctx) throws IOException {
-        List<Path> files = Files.list(Paths.get(user))
+        List<Path> files = Files.list(Paths.get(userDirectory))
                 .filter(n -> !Files.isDirectory(n))
                 .collect(Collectors.toList());
 

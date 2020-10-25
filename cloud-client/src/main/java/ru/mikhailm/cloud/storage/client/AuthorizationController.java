@@ -15,10 +15,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 public class AuthorizationController {
-    public TextField loginField;
-    public PasswordField passwordField;
-    Main main;
-    Stage authStage;
+    @FXML
+    private TextField loginField;
+
+    @FXML
+    private PasswordField passwordField;
+
+    private Main main;
+    private Stage authStage;
 
     @FXML
     private void initialize() {
