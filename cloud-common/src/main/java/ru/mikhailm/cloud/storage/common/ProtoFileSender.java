@@ -16,20 +16,20 @@ public class ProtoFileSender {
         ByteBuf buf;
         buf = ByteBufAllocator.DEFAULT.directBuffer(1);
         buf.writeByte(CommandCode.FILE);
-        channel.writeAndFlush(buf);
+        channel.write(buf);
 
         byte[] filenameBytes = path.getFileName().toString().getBytes(StandardCharsets.UTF_8);
         buf = ByteBufAllocator.DEFAULT.directBuffer(4);
         buf.writeInt(filenameBytes.length);
-        channel.writeAndFlush(buf);
+        channel.write(buf);
 
         buf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
         buf.writeBytes(filenameBytes);
-        channel.writeAndFlush(buf);
+        channel.write(buf);
 
         buf = ByteBufAllocator.DEFAULT.directBuffer(8);
         buf.writeLong(Files.size(path));
-        channel.writeAndFlush(buf);
+        channel.write(buf);
 
         ChannelFuture transferOperationFuture = channel.writeAndFlush(region);
         if (finishListener != null) {
@@ -44,13 +44,13 @@ public class ProtoFileSender {
         //Отправка сигнального байта команды
         buf = ByteBufAllocator.DEFAULT.directBuffer(1);
         buf.writeByte(CommandCode.REQUEST_FILE);
-        channel.writeAndFlush(buf);
+        channel.write(buf);
 
         //Отправка длины имени файла
         byte[] filenameBytes = fileName.getBytes(StandardCharsets.UTF_8);
         buf = ByteBufAllocator.DEFAULT.directBuffer(4);
         buf.writeInt(filenameBytes.length);
-        channel.writeAndFlush(buf);
+        channel.write(buf);
 
         //Отправка имени файла
         buf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
@@ -61,6 +61,56 @@ public class ProtoFileSender {
     public static void updateFileList(Channel channel) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.directBuffer(1);
         buf.writeByte(CommandCode.REQUEST_FILE_LIST);
+        channel.writeAndFlush(buf);
+    }
+
+    public static void renameFile(String oldFileName, String newFileName, Channel channel) {
+        ByteBuf buf;
+
+        //Отправка сигнального байта команды
+        buf = ByteBufAllocator.DEFAULT.directBuffer(1);
+        buf.writeByte(CommandCode.REQUEST_FILE_RENAME);
+        channel.write(buf);
+
+        //Отправка длины имени файла
+        byte[] filenameBytes = oldFileName.getBytes(StandardCharsets.UTF_8);
+        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        buf.writeInt(filenameBytes.length);
+        channel.write(buf);
+
+        //Отправка имени файла
+        buf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
+        buf.writeBytes(filenameBytes);
+        channel.write(buf);
+
+        filenameBytes = newFileName.getBytes(StandardCharsets.UTF_8);
+        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        buf.writeInt(filenameBytes.length);
+        channel.write(buf);
+
+        //Отправка имени файла
+        buf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
+        buf.writeBytes(filenameBytes);
+        channel.writeAndFlush(buf);
+    }
+
+    public static void deleteFile(String fileName, Channel channel) {
+        ByteBuf buf;
+
+        //Отправка сигнального байта команды
+        buf = ByteBufAllocator.DEFAULT.directBuffer(1);
+        buf.writeByte(CommandCode.REQUEST_FILE_DELETE);
+        channel.write(buf);
+
+        //Отправка длины имени файла
+        byte[] filenameBytes = fileName.getBytes(StandardCharsets.UTF_8);
+        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        buf.writeInt(filenameBytes.length);
+        channel.write(buf);
+
+        //Отправка имени файла
+        buf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
+        buf.writeBytes(filenameBytes);
         channel.writeAndFlush(buf);
     }
 }
