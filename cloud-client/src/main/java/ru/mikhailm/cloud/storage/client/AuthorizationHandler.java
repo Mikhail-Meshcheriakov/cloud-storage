@@ -10,10 +10,10 @@ import ru.mikhailm.cloud.storage.common.CommandCode;
 import java.io.IOException;
 
 public class AuthorizationHandler extends ChannelInboundHandlerAdapter {
-    AuthorizationController authorizationController;
+    ChannelInboundListener listener;
 
-    public AuthorizationHandler(AuthorizationController authorizationController) {
-        this.authorizationController = authorizationController;
+    public AuthorizationHandler(ChannelInboundListener listener) {
+        this.listener = listener;
     }
 
     @Override
@@ -25,11 +25,7 @@ public class AuthorizationHandler extends ChannelInboundHandlerAdapter {
             //При успешной авторизации добавляем в pipeline ProtoHandler и удаляем AuthorizationHandler
             if (commandCode == CommandCode.AUTHORIZATION_SUCCESS) {
                 Platform.runLater(() -> {
-                    try {
-                        authorizationController.authSuccess();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                        listener.authSuccess();
                 });
                 ctx.pipeline().addLast(new ProtoHandler())
                         .remove(this);
@@ -37,12 +33,15 @@ public class AuthorizationHandler extends ChannelInboundHandlerAdapter {
 
             //При неудачной авторизации сообщаем об этом пользователю
             if (commandCode == CommandCode.AUTHORIZATION_FAIL) {
+//                Platform.runLater(() -> {
+//                    Alert alert = new Alert(Alert.AlertType.WARNING);
+//                    alert.setTitle("");
+//                    alert.setHeaderText(null);
+//                    alert.setContentText("Неверный логин или пароль");
+//                    alert.show();
+//                });
                 Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.WARNING);
-                    alert.setTitle("");
-                    alert.setHeaderText(null);
-                    alert.setContentText("Неверный логин или пароль");
-                    alert.show();
+                    listener.authFail();
                 });
             }
         }

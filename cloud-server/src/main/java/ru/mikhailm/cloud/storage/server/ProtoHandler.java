@@ -195,7 +195,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             if (buf.readableBytes() >= nextLength) {
                 byte[] fileName = new byte[nextLength];
                 buf.readBytes(fileName);
-                System.out.println("STATE: Filename received - _" + new String(fileName, StandardCharsets.UTF_8));
+                System.out.println("STATE: Filename received - " + new String(fileName, StandardCharsets.UTF_8));
                 out = new BufferedOutputStream(new FileOutputStream(userDirectory + "\\" + new String(fileName)));
                 currentState.setNumberOperation(2);
             }
@@ -249,11 +249,12 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
         //Отправляем сигнальный байт с кодом команды
         ByteBuf outBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
         outBuf.writeByte(FILE_LIST);
-        ctx.writeAndFlush(outBuf);
+        ctx.write(outBuf);
 
         //Отправляем количество файлов в списке
         outBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         outBuf.writeInt(files.size());
+        System.out.println("FILE_LIST: количество файлов " + files.size());
         ctx.writeAndFlush(outBuf);
 
         if (files.size() == 0) return;
@@ -263,14 +264,17 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             byte[] filenameBytes = file.getFileName().toString().getBytes(StandardCharsets.UTF_8);
             outBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
             outBuf.writeInt(filenameBytes.length);
-            ctx.writeAndFlush(outBuf);
+            System.out.println("FILE_LIST: длина имени файла " + filenameBytes.length);
+            ctx.write(outBuf);
 
             outBuf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
             outBuf.writeBytes(filenameBytes);
-            ctx.writeAndFlush(outBuf);
+            System.out.println("FILE_LIST: имя файла " + new String(filenameBytes));
+            ctx.write(outBuf);
 
             outBuf = ByteBufAllocator.DEFAULT.directBuffer(8);
             outBuf.writeLong(Files.size(file));
+            System.out.println("FILE_LIST: размер файла " + Files.size(file));
             ctx.writeAndFlush(outBuf);
         }
     }
