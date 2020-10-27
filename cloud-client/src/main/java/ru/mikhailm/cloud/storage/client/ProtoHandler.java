@@ -42,12 +42,23 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     private int counter;
     private byte[] fileName;
     ChannelInboundListener listener;
+    boolean littleData;
+    ByteBuf buf;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        ByteBuf buf = (ByteBuf) msg;
+        if (!littleData) {
+            buf = (ByteBuf) msg;
+        } else if ((buf.capacity() - buf.writerIndex()) >= ((ByteBuf) msg).writerIndex()) {
+            buf.capacity(((ByteBuf) msg).writerIndex() + buf.capacity());
+            buf.writeBytes((ByteBuf) msg);
+        } else {
+            buf.writeBytes((ByteBuf) msg);
+        }
+
+        littleData = false;
         listener = Network.getInstance().getListener();
-        while (buf.readableBytes() > 0) {
+        while (buf.readableBytes() > 0 && !littleData) {
             if (currentState == State.IDLE) {
                 byte commandCode = buf.readByte();
                 System.out.println(commandCode);
@@ -87,7 +98,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
 
     private void fileList(ByteBuf buf) {
         //Получаем количество файлов в списке
-        if (State.FILE_LIST.getNumberOperation() == 0)
+        if (State.FILE_LIST.getNumberOperation() == 0) {
             if (buf.readableBytes() >= 4) {
                 countFiles = buf.readInt();
                 System.out.println("FILE_LIST: количество файлов " + countFiles);
@@ -98,7 +109,10 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                     currentState = State.IDLE;
                     State.FILE_LIST.setNumberOperation(0);
                 }
+            } else {
+                littleData = true;
             }
+        }
         //Получаем список файлов в цикле, пока счетчик counter не достигнет количества файлов в списке
         while (buf.readableBytes() > 0) {
             //Получаем длину имени файла
@@ -108,6 +122,9 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                     nextLength = buf.readInt();
                     System.out.println("FILE_LIST: длина имени файла " + nextLength);
                     State.FILE_LIST.setNumberOperation(2);
+                } else {
+                    littleData = true;
+                    break;
                 }
             }
             //Получаем имя файла
@@ -118,6 +135,9 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                     buf.readBytes(fileName);
                     System.out.println("FILE_LIST: имя файла " + new String(fileName));
                     State.FILE_LIST.setNumberOperation(3);
+                } else {
+                    littleData = true;
+                    break;
                 }
             }
             //Получаем размер файла
@@ -140,6 +160,9 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                         currentState = State.IDLE;
                         break;
                     }
+                } else {
+                    littleData = true;
+                    break;
                 }
             }
         }
@@ -151,7 +174,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 System.out.println("STATE: Get filename length");
                 nextLength = buf.readInt();
                 currentState.setNumberOperation(1);
-            }
+            } else littleData = true;
         }
 
         if (currentState.getNumberOperation() == 1) {
@@ -163,7 +186,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 System.out.println(localDirectory + "\\" + new String(fileName));
                 out = new BufferedOutputStream(new FileOutputStream(localDirectory + "\\" + new String(fileName)));
                 currentState.setNumberOperation(2);
-            }
+            } else littleData = true;
         }
 
         if (currentState.getNumberOperation() == 2) {
@@ -179,7 +202,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 } else {
                     currentState.setNumberOperation(3);
                 }
-            }
+            } else littleData = true;
         }
 
         if (currentState.getNumberOperation() == 3) {
@@ -188,8 +211,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 out.write(b);
                 receivedFileLength++;
                 if (fileLength == receivedFileLength) {
-                    currentState = State.IDLE;
                     currentState.setNumberOperation(0);
+                    currentState = State.IDLE;
                     System.out.println("File received");
                     out.close();
                     listener.updateLocalList();
