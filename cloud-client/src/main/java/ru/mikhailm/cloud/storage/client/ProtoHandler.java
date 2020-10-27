@@ -8,11 +8,9 @@ import ru.mikhailm.cloud.storage.common.CommandCode;
 import ru.mikhailm.cloud.storage.common.FileInfo;
 
 import java.io.BufferedOutputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,10 +42,6 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     private int counter;
     private byte[] fileName;
     ChannelInboundListener listener;
-
-    private int debug1;
-    private int debug2;
-    private int debug3;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -118,7 +112,6 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             }
             //Получаем имя файла
             if (State.FILE_LIST.getNumberOperation() == 2) {
-
                 System.out.println("2!!!! " + buf.readableBytes());
                 if (buf.readableBytes() >= nextLength) {
                     fileName = new byte[nextLength];
@@ -152,7 +145,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void file(ByteBuf buf) {
+    private void file(ByteBuf buf) throws IOException {
         if (currentState.getNumberOperation() == 0) {
             if (buf.readableBytes() >= 4) {
                 System.out.println("STATE: Get filename length");
@@ -167,11 +160,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 buf.readBytes(fileName);
                 String localDirectory = ((MainController) listener).getCurrentLocalDirectory();
                 System.out.println("STATE: Filename received - " + new String(fileName, StandardCharsets.UTF_8));
-                try {
-                    out = new BufferedOutputStream(new FileOutputStream(localDirectory + "\\" + new String(fileName)));
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                }
+                System.out.println(localDirectory + "\\" + new String(fileName));
+                out = new BufferedOutputStream(new FileOutputStream(localDirectory + "\\" + new String(fileName)));
                 currentState.setNumberOperation(2);
             }
         }
@@ -184,12 +174,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                     currentState.setNumberOperation(0);
                     currentState = State.IDLE;
                     System.out.println("File received");
-                    System.out.println("out.close() - length == 0");
-                    try {
-                        out.close();
-                    } catch (IOException e) {
-                        throw new RuntimeException("length = 0", e);
-                    }
+                    out.close();
                     listener.updateLocalList();
                 } else {
                     currentState.setNumberOperation(3);
@@ -200,22 +185,13 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
         if (currentState.getNumberOperation() == 3) {
             while (buf.readableBytes() > 0) {
                 byte b = buf.readByte();
-                try {
-                    out.write(b);
-                } catch (IOException e) {
-                    throw new RuntimeException("out.write", e);
-                }
+                out.write(b);
                 receivedFileLength++;
                 if (fileLength == receivedFileLength) {
                     currentState = State.IDLE;
                     currentState.setNumberOperation(0);
                     System.out.println("File received");
-                    System.out.println("out.close()");
-                    try {
-                        out.close();
-                    } catch (IOException e) {
-                        throw new RuntimeException("close", e);
-                    }
+                    out.close();
                     listener.updateLocalList();
                     break;
                 }

@@ -19,7 +19,7 @@
         <Button maxWidth="Infinity" focusTraversable="false" text="Копировать файл" HBox.hgrow="ALWAYS" onAction="#btnCopyFile"/>
         <Button maxWidth="Infinity" focusTraversable="false" text="Переименовать файл" HBox.hgrow="ALWAYS" onAction="#btnRenameFile"/>
         <Button maxWidth="Infinity" focusTraversable="false" text="Удалить файл" HBox.hgrow="ALWAYS" onAction="#btnDeleteFile"/>
-        <Button maxWidth="Infinity" focusTraversable="false" text="Выход из программы" HBox.hgrow="ALWAYS" onAction="#exitAction"/>
+        <Button maxWidth="Infinity" focusTraversable="false" text="Обновить список файлов" HBox.hgrow="ALWAYS" onAction="#updateAllList"/>
         <padding>
             <Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
         </padding>

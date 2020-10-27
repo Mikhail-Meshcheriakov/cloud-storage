@@ -19,6 +19,9 @@ import java.util.stream.Collectors;
 
 public class PanelController {
     @FXML
+    private Label locationLabel;
+
+    @FXML
     private ComboBox<String> disksBox;
 
     @FXML
@@ -29,11 +32,19 @@ public class PanelController {
 
     private boolean isRemote;
 
+    private String location;
+
     public void setIsRemote(boolean isRemote) {
         this.isRemote = isRemote;
     }
 
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
     public void init() {
+        locationLabel.setText(location);
+
         TableColumn<FileInfo, String> filenameColumn = new TableColumn<>("Имя");
         filenameColumn.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getName()));
         filenameColumn.setPrefWidth(240);

@@ -43,7 +43,9 @@ public class MainController implements ChannelInboundListener {
         remotePanelController = (PanelController) leftPanel.getProperties().get("ctrl");
 
         localPanelController.setIsRemote(false);
+        localPanelController.setLocation("Local");
         remotePanelController.setIsRemote(true);
+        remotePanelController.setLocation("Remote");
     }
 
     public String getCurrentLocalDirectory() {
@@ -207,5 +209,10 @@ public class MainController implements ChannelInboundListener {
     public void exitAction() {
         Network.getInstance().stop();
         Platform.exit();
+    }
+
+    public void updateAllList(ActionEvent actionEvent) {
+        ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel());
+        localPanelController.updateLocalList(Paths.get(localPanelController.getCurrentPath()));
     }
 }
