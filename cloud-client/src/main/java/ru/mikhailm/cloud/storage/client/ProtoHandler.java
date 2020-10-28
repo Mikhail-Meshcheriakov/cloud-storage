@@ -44,6 +44,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     ChannelInboundListener listener;
     boolean littleData;
     ByteBuf buf;
+    FileInfo.FileType fileType;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -115,39 +116,49 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
         }
         //Получаем список файлов в цикле, пока счетчик counter не достигнет количества файлов в списке
         while (buf.readableBytes() > 0) {
-            //Получаем длину имени файла
             if (State.FILE_LIST.getNumberOperation() == 1) {
-                System.out.println("1!!!! " + buf.readableBytes());
+                if (buf.readableBytes() >= 1) {
+                    byte type = buf.readByte();
+                    if (type == 0) {
+                        fileType = FileInfo.FileType.FILE;
+                    } else {
+                        fileType = FileInfo.FileType.DIRECTORY;
+                    }
+                    State.FILE_LIST.setNumberOperation(2);
+                }
+            }
+
+
+            //Получаем длину имени файла
+            if (State.FILE_LIST.getNumberOperation() == 2) {
                 if (buf.readableBytes() >= 4) {
                     nextLength = buf.readInt();
                     System.out.println("FILE_LIST: длина имени файла " + nextLength);
-                    State.FILE_LIST.setNumberOperation(2);
-                } else {
-                    littleData = true;
-                    break;
-                }
-            }
-            //Получаем имя файла
-            if (State.FILE_LIST.getNumberOperation() == 2) {
-                System.out.println("2!!!! " + buf.readableBytes());
-                if (buf.readableBytes() >= nextLength) {
-                    fileName = new byte[nextLength];
-                    buf.readBytes(fileName);
-                    System.out.println("FILE_LIST: имя файла " + new String(fileName));
                     State.FILE_LIST.setNumberOperation(3);
                 } else {
                     littleData = true;
                     break;
                 }
             }
-            //Получаем размер файла
+            //Получаем имя файла
             if (State.FILE_LIST.getNumberOperation() == 3) {
-                System.out.println("3!!!! " + buf.readableBytes());
+                if (buf.readableBytes() >= nextLength) {
+                    fileName = new byte[nextLength];
+                    buf.readBytes(fileName);
+                    System.out.println("FILE_LIST: имя файла " + new String(fileName));
+                    State.FILE_LIST.setNumberOperation(4);
+                } else {
+                    littleData = true;
+                    break;
+                }
+            }
+            //Получаем размер файла
+            if (State.FILE_LIST.getNumberOperation() == 4) {
                 if (buf.readableBytes() >= 8) {
                     long fileSize = buf.readLong();
                     System.out.println("FILE_LIST: размер файла " + fileSize);
                     //Добавляем данные о файле в список
-                    fileList.add(new FileInfo(new String(fileName), fileSize));
+                    fileList.add(new FileInfo(new String(fileName), fileSize, fileType));
                     counter++;
                     State.FILE_LIST.setNumberOperation(1);
 
@@ -174,7 +185,9 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 System.out.println("STATE: Get filename length");
                 nextLength = buf.readInt();
                 currentState.setNumberOperation(1);
-            } else littleData = true;
+            } else {
+                littleData = true;
+            }
         }
 
         if (currentState.getNumberOperation() == 1) {
@@ -186,7 +199,9 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 System.out.println(localDirectory + "\\" + new String(fileName));
                 out = new BufferedOutputStream(new FileOutputStream(localDirectory + "\\" + new String(fileName)));
                 currentState.setNumberOperation(2);
-            } else littleData = true;
+            } else {
+                littleData = true;
+            }
         }
 
         if (currentState.getNumberOperation() == 2) {
@@ -202,7 +217,9 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 } else {
                     currentState.setNumberOperation(3);
                 }
-            } else littleData = true;
+            } else {
+                littleData = true;
+            }
         }
 
         if (currentState.getNumberOperation() == 3) {

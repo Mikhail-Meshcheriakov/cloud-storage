@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import ru.mikhailm.cloud.storage.common.FileInfo;
 import ru.mikhailm.cloud.storage.common.ProtoFileSender;
 
 import java.io.BufferedOutputStream;
@@ -27,6 +28,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     private BufferedOutputStream out;
     private Path source;
     private String userDirectory;
+    boolean littleData;
+    ByteBuf buf;
 
     public ProtoHandler(String user) {
         userDirectory = Paths.get("D:", "server_storage", user).toString();
@@ -43,7 +46,17 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        ByteBuf buf = (ByteBuf) msg;
+        if (!littleData) {
+            buf = (ByteBuf) msg;
+        } else if ((buf.capacity() - buf.writerIndex()) >= ((ByteBuf) msg).writerIndex()) {
+            buf.capacity(((ByteBuf) msg).writerIndex() + buf.capacity());
+            buf.writeBytes((ByteBuf) msg);
+        } else {
+            buf.writeBytes((ByteBuf) msg);
+        }
+
+        littleData = false;
+
         while (buf.readableBytes() > 0) {
             if (currentState == State.IDLE) {
                 byte commandCode = buf.readByte();
@@ -103,6 +116,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             if (buf.readableBytes() >= 4) {
                 nextLength = buf.readInt();
                 currentState.setNumberOperation(1);
+            } else {
+                littleData = true;
             }
         }
 
@@ -114,6 +129,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 currentState.setNumberOperation(0);
                 currentState = State.IDLE;
                 sendFileList(ctx);
+            } else {
+                littleData = true;
             }
         }
     }
@@ -124,6 +141,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             if (buf.readableBytes() >= 4) {
                 nextLength = buf.readInt();
                 currentState.setNumberOperation(1);
+            } else {
+                littleData = true;
             }
         }
 
@@ -133,6 +152,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 buf.readBytes(fileName);
                 source = Paths.get(userDirectory, new String(fileName, StandardCharsets.UTF_8));
                 currentState.setNumberOperation(2);
+            } else {
+                littleData = true;
             }
         }
 
@@ -140,6 +161,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             if (buf.readableBytes() >= 4) {
                 nextLength = buf.readInt();
                 currentState.setNumberOperation(3);
+            } else {
+                littleData = true;
             }
         }
 
@@ -152,6 +175,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 currentState.setNumberOperation(0);
                 currentState = State.IDLE;
                 sendFileList(ctx);
+            } else {
+                littleData = true;
             }
         }
     }
@@ -161,6 +186,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             if (buf.readableBytes() >= 4) {
                 nextLength = buf.readInt();
                 currentState.setNumberOperation(1);
+            } else {
+                littleData = true;
             }
         }
         //Получаем имя файла и отправляем его клиенту
@@ -178,6 +205,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 });
                 currentState.setNumberOperation(0);
                 currentState = State.IDLE;
+            } else {
+                littleData = true;
             }
         }
     }
@@ -188,6 +217,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 System.out.println("STATE: Get filename length");
                 nextLength = buf.readInt();
                 currentState.setNumberOperation(1);
+            } else {
+                littleData = true;
             }
         }
 
@@ -198,6 +229,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 System.out.println("STATE: Filename received - " + new String(fileName, StandardCharsets.UTF_8));
                 out = new BufferedOutputStream(new FileOutputStream(userDirectory + "\\" + new String(fileName)));
                 currentState.setNumberOperation(2);
+            } else {
+                littleData = true;
             }
         }
 
@@ -214,6 +247,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 } else {
                     currentState.setNumberOperation(3);
                 }
+            } else {
+                littleData = true;
             }
         }
 
@@ -242,8 +277,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
 
     //Метод для отправки списка файлов на клиент
     private void sendFileList(ChannelHandlerContext ctx) throws IOException {
-        List<Path> files = Files.list(Paths.get(userDirectory))
-                .filter(n -> !Files.isDirectory(n))
+        List<FileInfo> files = Files.list(Paths.get(userDirectory))
+                .map(FileInfo::new)
                 .collect(Collectors.toList());
 
         //Отправляем сигнальный байт с кодом команды
@@ -260,8 +295,18 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
         if (files.size() == 0) return;
 
         //Проходимся по всем файлам и отправляем длину имени, имя и размер файла
-        for (Path file : files) {
-            byte[] filenameBytes = file.getFileName().toString().getBytes(StandardCharsets.UTF_8);
+        for (FileInfo file : files) {
+            outBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
+            if (file.getType() == FileInfo.FileType.FILE) {
+                outBuf.writeByte(0);
+                System.out.println("FILE_LIST: файл");
+            } else {
+                outBuf.writeByte(1);
+                System.out.println("FILE_LIST: директория");
+            }
+            ctx.write(outBuf);
+
+            byte[] filenameBytes = file.getName().getBytes(StandardCharsets.UTF_8);
             outBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
             outBuf.writeInt(filenameBytes.length);
             System.out.println("FILE_LIST: длина имени файла " + filenameBytes.length);
@@ -273,8 +318,8 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             ctx.write(outBuf);
 
             outBuf = ByteBufAllocator.DEFAULT.directBuffer(8);
-            outBuf.writeLong(Files.size(file));
-            System.out.println("FILE_LIST: размер файла " + Files.size(file));
+            outBuf.writeLong(file.getSize());
+            System.out.println("FILE_LIST: размер файла " + file.getSize());
             ctx.writeAndFlush(outBuf);
         }
     }

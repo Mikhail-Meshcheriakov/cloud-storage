@@ -9,6 +9,7 @@ import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -20,7 +21,7 @@ import ru.mikhailm.cloud.storage.common.ProtoFileSender;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
@@ -176,11 +177,74 @@ public class MainController implements ChannelInboundListener {
         if (localPanelController.getSelectedFilename() == null && remotePanelController.getSelectedFilename() == null) {
             showDialog("Не выбран ни один файл");
         }
+
+        String oldFileName = (localPanelController.getSelectedFilename() != null) ? localPanelController.getSelectedFilename() : remotePanelController.getSelectedFilename();
+
+        Dialog<String> dialog = new Dialog<>();
+        dialog.initStyle(StageStyle.UTILITY);
+
+// Настраиваем кнопки.
+        ButtonType okButtonType = new ButtonType("ОК", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButtonType = new ButtonType("Отмена", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(okButtonType, cancelButtonType);
+
+// Создаем поле для ввода нового имени файла.
+        BorderPane borderPane = new BorderPane();
+        TextField fileName = new TextField();
+        fileName.setText(oldFileName);
+
+        borderPane.setCenter(fileName);
+
+// Делаем кнопку неактивной, если поле для ввода пустое .
+        Node renameButton = dialog.getDialogPane().lookupButton(okButtonType);
+        renameButton.setDisable(true);
+        fileName.textProperty().addListener((observable, oldValue, newValue) -> renameButton.setDisable(newValue.trim().isEmpty()));
+        dialog.getDialogPane().setContent(borderPane);
+
+//            Platform.runLater(fileName::requestFocus);
+
+// Обрабатываем результат диалогового окна.
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == okButtonType) {
+                return fileName.getText();
+            }
+            return null;
+        });
+
+        Optional<String> result = dialog.showAndWait();
+
+        if (localPanelController.getSelectedFilename() != null) {
+            result.ifPresent(newFileName -> {
+                try {
+                    Files.move(Paths.get(localPanelController.getCurrentPath(), oldFileName), Paths.get(localPanelController.getCurrentPath(), oldFileName).resolveSibling(newFileName));
+                    updateLocalList();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        if (remotePanelController.getSelectedFilename() != null) {
+            result.ifPresent(newFileName -> ProtoFileSender.renameFile(oldFileName, newFileName, Network.getInstance().getCurrentChannel()));
+        }
     }
 
     public void btnDeleteFile(ActionEvent actionEvent) {
         if (localPanelController.getSelectedFilename() == null && remotePanelController.getSelectedFilename() == null) {
             showDialog("Не выбран ни один файл");
+        }
+
+        if (localPanelController.getSelectedFilename() != null) {
+            try {
+                Files.deleteIfExists(Paths.get(localPanelController.getCurrentPath(), localPanelController.getSelectedFilename()));
+                updateLocalList();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (remotePanelController.getSelectedFilename() != null) {
+            ProtoFileSender.deleteFile(remotePanelController.getSelectedFilename(), Network.getInstance().getCurrentChannel());
         }
     }
 

@@ -2,11 +2,13 @@ package ru.mikhailm.cloud.storage.client;
 
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
+import javafx.util.Callback;
 import ru.mikhailm.cloud.storage.common.FileInfo;
 
 import java.io.IOException;
@@ -44,6 +46,9 @@ public class PanelController {
 
     public void init() {
         locationLabel.setText(location);
+        TableColumn<FileInfo, String> fileTypeColumn = new TableColumn<>();
+        fileTypeColumn.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getType().getName()));
+        fileTypeColumn.setPrefWidth(24);
 
         TableColumn<FileInfo, String> filenameColumn = new TableColumn<>("Имя");
         filenameColumn.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getName()));
@@ -69,8 +74,8 @@ public class PanelController {
         });
         fileSizeColumn.setPrefWidth(120);
 
-        filesTable.getColumns().addAll(filenameColumn, fileSizeColumn);
-        filesTable.getSortOrder().add(filenameColumn);
+        filesTable.getColumns().addAll(fileTypeColumn, filenameColumn, fileSizeColumn);
+        filesTable.getSortOrder().add(fileTypeColumn);
 
         disksBox.getItems().clear();
         if (isRemote) {
