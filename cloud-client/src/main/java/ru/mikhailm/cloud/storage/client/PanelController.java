@@ -10,6 +10,7 @@ import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
 import javafx.util.Callback;
 import ru.mikhailm.cloud.storage.common.FileInfo;
+import ru.mikhailm.cloud.storage.common.ProtoFileSender;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -35,6 +36,14 @@ public class PanelController {
     private boolean isRemote;
 
     private String location;
+
+    public TableView<FileInfo> getFilesTable() {
+        return filesTable;
+    }
+
+    public TextField getPathField() {
+        return pathField;
+    }
 
     public void setIsRemote(boolean isRemote) {
         this.isRemote = isRemote;
@@ -88,19 +97,19 @@ public class PanelController {
         }
         disksBox.getSelectionModel().select(0);
 
-        filesTable.setOnMouseClicked(new EventHandler<MouseEvent>() {
-            @Override
-            public void handle(MouseEvent event) {
-                if (event.getClickCount() == 2) {
-                    if (filesTable.getSelectionModel().getSelectedItem() != null) {
-                        Path path = Paths.get(pathField.getText()).resolve(filesTable.getSelectionModel().getSelectedItem().getName());
-                        if (Files.isDirectory(path)) {
-                            updateLocalList(path);
-                        }
-                    }
-                }
-            }
-        });
+//        filesTable.setOnMouseClicked(new EventHandler<MouseEvent>() {
+//            @Override
+//            public void handle(MouseEvent event) {
+//                if (event.getClickCount() == 2) {
+//                    if (filesTable.getSelectionModel().getSelectedItem() != null) {
+//                        Path path = Paths.get(pathField.getText()).resolve(filesTable.getSelectionModel().getSelectedItem().getName());
+//                        if (Files.isDirectory(path)) {
+//                            updateLocalList(path);
+//                        }
+//                    }
+//                }
+//            }
+//        });
 
         if (!isRemote) {
             updateLocalList(Paths.get("."));
@@ -112,6 +121,13 @@ public class PanelController {
             Path upperPath = Paths.get(pathField.getText()).getParent();
             if (upperPath != null) {
                 updateLocalList(upperPath);
+            }
+        } else {
+
+            if (!pathField.getText().equals("")) {
+                String upDirectory = pathField.getText().substring(0, pathField.getText().lastIndexOf("\\"));
+                ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel(), upDirectory);
+                pathField.setText(upDirectory);
             }
         }
     }

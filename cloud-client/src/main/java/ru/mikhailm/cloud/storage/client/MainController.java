@@ -22,6 +22,7 @@ import ru.mikhailm.cloud.storage.common.ProtoFileSender;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +48,24 @@ public class MainController implements ChannelInboundListener {
         localPanelController.setLocation("Local");
         remotePanelController.setIsRemote(true);
         remotePanelController.setLocation("Remote");
+
+        remotePanelController.getFilesTable().setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                if (remotePanelController.getFilesTable().getSelectionModel().getSelectedItem() != null && remotePanelController.getFilesTable().getSelectionModel().getSelectedItem().getType() == FileInfo.FileType.DIRECTORY) {
+                    remotePanelController.getPathField().setText(remotePanelController.getCurrentPath() + "\\" + remotePanelController.getFilesTable().getSelectionModel().getSelectedItem().getName());
+                    ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel(), remotePanelController.getCurrentPath());
+                }
+            }
+        });
+
+        localPanelController.getFilesTable().setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                if (localPanelController.getFilesTable().getSelectionModel().getSelectedItem() != null && localPanelController.getFilesTable().getSelectionModel().getSelectedItem().getType() == FileInfo.FileType.DIRECTORY) {
+                    Path path = Paths.get(localPanelController.getCurrentPath()).resolve(localPanelController.getFilesTable().getSelectionModel().getSelectedItem().getName());
+                    localPanelController.updateLocalList(path);
+                }
+            }
+        });
     }
 
     public String getCurrentLocalDirectory() {
@@ -252,7 +271,7 @@ public class MainController implements ChannelInboundListener {
     public void authSuccess() {
         localPanelController.init();
         remotePanelController.init();
-        ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel());
+        ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel(), "");
     }
 
     @Override
@@ -276,7 +295,43 @@ public class MainController implements ChannelInboundListener {
     }
 
     public void updateAllList(ActionEvent actionEvent) {
-        ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel());
+        ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel(), remotePanelController.getCurrentPath());
         localPanelController.updateLocalList(Paths.get(localPanelController.getCurrentPath()));
+    }
+
+    public void createDirectory(ActionEvent actionEvent) {
+        Dialog<String> dialog = new Dialog<>();
+        dialog.initStyle(StageStyle.UTILITY);
+
+// Настраиваем кнопки.
+        ButtonType okButtonType = new ButtonType("ОК", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButtonType = new ButtonType("Отмена", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(okButtonType, cancelButtonType);
+
+// Создаем поле для ввода нового имени файла.
+        BorderPane borderPane = new BorderPane();
+        TextField fileName = new TextField();
+
+        borderPane.setCenter(fileName);
+
+// Делаем кнопку неактивной, если поле для ввода пустое .
+        Node renameButton = dialog.getDialogPane().lookupButton(okButtonType);
+        renameButton.setDisable(true);
+        fileName.textProperty().addListener((observable, oldValue, newValue) -> renameButton.setDisable(newValue.trim().isEmpty()));
+        dialog.getDialogPane().setContent(borderPane);
+
+        Platform.runLater(fileName::requestFocus);
+
+// Обрабатываем результат диалогового окна.
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == okButtonType) {
+                return fileName.getText();
+            }
+            return null;
+        });
+
+        Optional<String> result = dialog.showAndWait();
+
+        result.ifPresent(newFileName -> ProtoFileSender.createDirectory(newFileName, Network.getInstance().getCurrentChannel()));
     }
 }
