@@ -58,9 +58,20 @@ public class ProtoFileSender {
         channel.writeAndFlush(buf);
     }
 
-    public static void updateFileList(Channel channel) {
+    public static void updateFileList(Channel channel, String directory) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.directBuffer(1);
         buf.writeByte(CommandCode.REQUEST_FILE_LIST);
+        channel.write(buf);
+
+        //Отправка длины имени каталога
+        byte[] directoryName = directory.getBytes(StandardCharsets.UTF_8);
+        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        buf.writeInt(directoryName.length);
+        channel.write(buf);
+
+        //Отправка имени каталога
+        buf = ByteBufAllocator.DEFAULT.directBuffer(directoryName.length);
+        buf.writeBytes(directoryName);
         channel.writeAndFlush(buf);
     }
 
@@ -104,6 +115,26 @@ public class ProtoFileSender {
 
         //Отправка длины имени файла
         byte[] filenameBytes = fileName.getBytes(StandardCharsets.UTF_8);
+        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        buf.writeInt(filenameBytes.length);
+        channel.write(buf);
+
+        //Отправка имени файла
+        buf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
+        buf.writeBytes(filenameBytes);
+        channel.writeAndFlush(buf);
+    }
+
+    public static void createDirectory(String name, Channel channel) {
+        ByteBuf buf;
+
+        //Отправка сигнального байта команды
+        buf = ByteBufAllocator.DEFAULT.directBuffer(1);
+        buf.writeByte(CommandCode.CREATE_DIRECTORY);
+        channel.write(buf);
+
+        //Отправка длины имени файла
+        byte[] filenameBytes = name.getBytes(StandardCharsets.UTF_8);
         buf = ByteBufAllocator.DEFAULT.directBuffer(4);
         buf.writeInt(filenameBytes.length);
         channel.write(buf);
