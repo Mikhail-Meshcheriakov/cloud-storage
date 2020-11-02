@@ -2,15 +2,11 @@ package ru.mikhailm.cloud.storage.client;
 
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
-import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
-import javafx.scene.input.MouseEvent;
-import javafx.util.Callback;
 import ru.mikhailm.cloud.storage.common.FileInfo;
-import ru.mikhailm.cloud.storage.common.ProtoFileSender;
+import ru.mikhailm.cloud.storage.common.ProtoSender;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -126,7 +122,7 @@ public class PanelController {
 
             if (!pathField.getText().equals("")) {
                 String upDirectory = pathField.getText().substring(0, pathField.getText().lastIndexOf("\\"));
-                ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel(), upDirectory);
+                ProtoSender.updateFileList(Network.getInstance().getCurrentChannel(), upDirectory);
                 pathField.setText(upDirectory);
             }
         }

@@ -3,10 +3,9 @@ package ru.mikhailm.cloud.storage.server;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import ru.mikhailm.cloud.storage.common.FileInfo;
-import ru.mikhailm.cloud.storage.common.ProtoFileSender;
+import ru.mikhailm.cloud.storage.common.ProtoSender;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -232,7 +231,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             if (buf.readableBytes() >= nextLength) {
                 byte[] fileName = new byte[nextLength];
                 buf.readBytes(fileName);
-                ProtoFileSender.sendFile(Paths.get(currentDirectory, new String(fileName)), ctx.channel(), channelFuture -> {
+                ProtoSender.sendFile(Paths.get(currentDirectory, new String(fileName)), ctx.channel(), channelFuture -> {
                     if (!channelFuture.isSuccess()) {
                         channelFuture.cause().printStackTrace();
                     }

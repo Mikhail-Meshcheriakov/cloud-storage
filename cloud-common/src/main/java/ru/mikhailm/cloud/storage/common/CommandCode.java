@@ -13,4 +13,7 @@ public class CommandCode {
     public static final byte FILE_SUCCESS = 10;
     public static final byte AUTHORIZATION_FAIL = 11;
     public static final byte CREATE_DIRECTORY = 12;
+    public static final byte REGISTRATION = 12;
+    public static final byte REGISTRATION_SUCCESS = 13;
+    public static final byte REGISTRATION_FAIL = 14;
 }

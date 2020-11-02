@@ -5,6 +5,7 @@ import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.Channel;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
@@ -17,8 +18,9 @@ import javafx.stage.StageStyle;
 import javafx.util.Pair;
 import ru.mikhailm.cloud.storage.common.CommandCode;
 import ru.mikhailm.cloud.storage.common.FileInfo;
-import ru.mikhailm.cloud.storage.common.ProtoFileSender;
+import ru.mikhailm.cloud.storage.common.ProtoSender;
 
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -53,7 +55,7 @@ public class MainController implements ChannelInboundListener {
             if (event.getClickCount() == 2) {
                 if (remotePanelController.getFilesTable().getSelectionModel().getSelectedItem() != null && remotePanelController.getFilesTable().getSelectionModel().getSelectedItem().getType() == FileInfo.FileType.DIRECTORY) {
                     remotePanelController.getPathField().setText(remotePanelController.getCurrentPath() + "\\" + remotePanelController.getFilesTable().getSelectionModel().getSelectedItem().getName());
-                    ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel(), remotePanelController.getCurrentPath());
+                    ProtoSender.updateFileList(Network.getInstance().getCurrentChannel(), remotePanelController.getCurrentPath());
                 }
             }
         });
@@ -79,8 +81,9 @@ public class MainController implements ChannelInboundListener {
 
 // Set the button types.
         ButtonType loginButtonType = new ButtonType("Вход", ButtonBar.ButtonData.OK_DONE);
+        ButtonType registrationButtonType = new ButtonType("Регистрация", ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButtonType = new ButtonType("Отмена", ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getDialogPane().getButtonTypes().addAll(loginButtonType, cancelButtonType);
+        dialog.getDialogPane().getButtonTypes().addAll(loginButtonType, registrationButtonType, cancelButtonType);
 
 // Create the username and password labels and fields.
         GridPane grid = new GridPane();
@@ -113,12 +116,15 @@ public class MainController implements ChannelInboundListener {
         dialog.getDialogPane().setContent(grid);
 
 // Request focus on the username field by default.
-        Platform.runLater(() -> textField.requestFocus());
+        Platform.runLater(textField::requestFocus);
 
 // Convert the result to a username-password-pair when the login button is clicked.
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == loginButtonType) {
                 return new Pair<>(textField.getText(), passwordField.getText());
+            }
+            if (dialogButton == registrationButtonType) {
+                return new Pair<>(null, null);
             }
             return null;
         });
@@ -126,39 +132,126 @@ public class MainController implements ChannelInboundListener {
         Optional<Pair<String, String>> result = dialog.showAndWait();
 
         if (!result.isPresent()) {
+            System.out.println("result = null login");
             exitAction();
         }
 
         result.ifPresent(usernamePassword -> {
-            login(usernamePassword.getKey(), usernamePassword.getValue());
+            System.out.println("userRegistration login");
+            if (usernamePassword.getKey() == null || usernamePassword.getValue() == null){
+                registrationDialog("");
+                dialog.close();
+            } else {
+                ProtoSender.userRegistration(true, usernamePassword.getKey(), usernamePassword.getValue(), Network.getInstance().getCurrentChannel());
+            }
         });
     }
 
-    public void login(String login, String password) {
-        Channel channel = Network.getInstance().getCurrentChannel();
+    public void registrationDialog(String message) {
+        Dialog<Pair<String, String>> dialog = new Dialog<>();
+        dialog.setTitle("Регистрация");
+        dialog.initStyle(StageStyle.UTILITY);
 
-        ByteBuf buf = ByteBufAllocator.DEFAULT.directBuffer(1);
-        buf.writeByte(CommandCode.AUTHORIZATION);
-        channel.write(buf);
+// Set the button types.
+        ButtonType registrationButtonType = new ButtonType("Регистрация", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButtonType = new ButtonType("Отмена", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(registrationButtonType, cancelButtonType);
 
-        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
-        byte[] bytes = login.getBytes(StandardCharsets.UTF_8);
-        buf.writeInt(bytes.length);
-        channel.write(buf);
+// Create the username and password labels and fields.
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20, 150, 10, 10));
 
-        buf = ByteBufAllocator.DEFAULT.directBuffer(bytes.length);
-        buf.writeBytes(bytes);
-        channel.write(buf);
+        Label lblErrorNotification = new Label(message);
+        lblErrorNotification.setTextFill(Color.RED);
+        TextField loginField = new TextField();
+        loginField.setPromptText("Логин");
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Пароль");
+        PasswordField confirmPasswordField = new PasswordField();
+        confirmPasswordField.setPromptText("Пароль ещё раз");
 
-        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
-        bytes = password.getBytes(StandardCharsets.UTF_8);
-        buf.writeInt(bytes.length);
-        channel.write(buf);
+        grid.add(new Label("Логин:"), 0, 0);
+        grid.add(loginField, 1, 0);
+        grid.add(new Label("Пароль:"), 0, 1);
+        grid.add(passwordField, 1, 1);
+        grid.add(new Label("Пароль еще раз:"), 0, 2);
+        grid.add(confirmPasswordField, 1, 2);
+        grid.add(lblErrorNotification, 1, 3);
 
-        buf = ByteBufAllocator.DEFAULT.directBuffer(bytes.length);
-        buf.writeBytes(bytes);
-        channel.writeAndFlush(buf);
+// Enable/Disable login button depending on whether a username was entered.
+        Node registrationButton = dialog.getDialogPane().lookupButton(registrationButtonType);
+        registrationButton.setDisable(true);
+
+// Do some validation (using the Java 8 lambda syntax).
+        loginField.textProperty().addListener((observable, oldValue, newValue) -> {
+            registrationButton.setDisable(newValue.trim().isEmpty() || passwordField.getText().trim().isEmpty() || confirmPasswordField.getText().trim().isEmpty());
+        });
+
+        passwordField.textProperty().addListener((observable, oldValue, newValue) -> {
+            registrationButton.setDisable(newValue.trim().isEmpty() || loginField.getText().trim().isEmpty() ||confirmPasswordField.getText().trim().isEmpty());
+        });
+
+        confirmPasswordField.textProperty().addListener((observable, oldValue, newValue) -> {
+            registrationButton.setDisable(newValue.trim().isEmpty() || loginField.getText().trim().isEmpty() ||passwordField.getText().trim().isEmpty());
+        });
+
+        dialog.getDialogPane().setContent(grid);
+
+// Request focus on the username field by default.
+        Platform.runLater(loginField::requestFocus);
+
+// Convert the result to a username-password-pair when the login button is clicked.
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == registrationButtonType) {
+                return new Pair<>(loginField.getText(), passwordField.getText());
+            }
+            return null;
+        });
+
+        Optional<Pair<String, String>> result = dialog.showAndWait();
+
+        if (!result.isPresent()) {
+            System.out.println("result = null");
+            exitAction();
+        }
+
+        result.ifPresent(usernamePassword -> {
+            if (passwordField.getText().equals(confirmPasswordField.getText())) {
+                System.out.println("userRegistration");
+                ProtoSender.userRegistration(false, usernamePassword.getKey(), usernamePassword.getValue(), Network.getInstance().getCurrentChannel());
+            } else {
+                registrationDialog("Пароли не совпадают");
+            }
+        });
     }
+
+//    public void login(String login, String password) {
+//        Channel channel = Network.getInstance().getCurrentChannel();
+//
+//        ByteBuf buf = ByteBufAllocator.DEFAULT.directBuffer(1);
+//        buf.writeByte(CommandCode.AUTHORIZATION);
+//        channel.write(buf);
+//
+//        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+//        byte[] bytes = login.getBytes(StandardCharsets.UTF_8);
+//        buf.writeInt(bytes.length);
+//        channel.write(buf);
+//
+//        buf = ByteBufAllocator.DEFAULT.directBuffer(bytes.length);
+//        buf.writeBytes(bytes);
+//        channel.write(buf);
+//
+//        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+//        bytes = password.getBytes(StandardCharsets.UTF_8);
+//        buf.writeInt(bytes.length);
+//        channel.write(buf);
+//
+//        buf = ByteBufAllocator.DEFAULT.directBuffer(bytes.length);
+//        buf.writeBytes(bytes);
+//        channel.writeAndFlush(buf);
+//    }
 
     @Override
     public void showDialog(String message) {
@@ -175,7 +268,7 @@ public class MainController implements ChannelInboundListener {
         }
 
         if (localPanelController.getSelectedFilename() != null) {
-            ProtoFileSender.sendFile(Paths.get(localPanelController.getCurrentPath(), localPanelController.getSelectedFilename()), Network.getInstance().getCurrentChannel(), future -> {
+            ProtoSender.sendFile(Paths.get(localPanelController.getCurrentPath(), localPanelController.getSelectedFilename()), Network.getInstance().getCurrentChannel(), future -> {
                 if (!future.isSuccess()) {
                     future.cause().printStackTrace();
                 }
@@ -187,7 +280,7 @@ public class MainController implements ChannelInboundListener {
 
         if (remotePanelController.getSelectedFilename() != null) {
             currentLocalDirectory = localPanelController.getCurrentPath();
-            ProtoFileSender.sendRequestFileDownload(remotePanelController.getSelectedFilename(), Network.getInstance().getCurrentChannel());
+            ProtoSender.sendRequestFileDownload(remotePanelController.getSelectedFilename(), Network.getInstance().getCurrentChannel());
         }
 
     }
@@ -244,7 +337,7 @@ public class MainController implements ChannelInboundListener {
         }
 
         if (remotePanelController.getSelectedFilename() != null) {
-            result.ifPresent(newFileName -> ProtoFileSender.renameFile(oldFileName, newFileName, Network.getInstance().getCurrentChannel()));
+            result.ifPresent(newFileName -> ProtoSender.renameFile(oldFileName, newFileName, Network.getInstance().getCurrentChannel()));
         }
     }
 
@@ -263,7 +356,7 @@ public class MainController implements ChannelInboundListener {
         }
 
         if (remotePanelController.getSelectedFilename() != null) {
-            ProtoFileSender.deleteFile(remotePanelController.getSelectedFilename(), Network.getInstance().getCurrentChannel());
+            ProtoSender.deleteFile(remotePanelController.getSelectedFilename(), Network.getInstance().getCurrentChannel());
         }
     }
 
@@ -271,12 +364,17 @@ public class MainController implements ChannelInboundListener {
     public void authSuccess() {
         localPanelController.init();
         remotePanelController.init();
-        ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel(), "");
+        ProtoSender.updateFileList(Network.getInstance().getCurrentChannel(), "");
     }
 
     @Override
     public void authFail() {
         loginDialog("Неверный логин или пароль");
+    }
+
+    @Override
+    public void registrationFail() {
+        registrationDialog("Пользователь с таким лгином уже существует");
     }
 
     @Override
@@ -295,7 +393,7 @@ public class MainController implements ChannelInboundListener {
     }
 
     public void updateAllList(ActionEvent actionEvent) {
-        ProtoFileSender.updateFileList(Network.getInstance().getCurrentChannel(), remotePanelController.getCurrentPath());
+        ProtoSender.updateFileList(Network.getInstance().getCurrentChannel(), remotePanelController.getCurrentPath());
         localPanelController.updateLocalList(Paths.get(localPanelController.getCurrentPath()));
     }
 
@@ -332,6 +430,6 @@ public class MainController implements ChannelInboundListener {
 
         Optional<String> result = dialog.showAndWait();
 
-        result.ifPresent(newFileName -> ProtoFileSender.createDirectory(newFileName, Network.getInstance().getCurrentChannel()));
+        result.ifPresent(newFileName -> ProtoSender.createDirectory(newFileName, Network.getInstance().getCurrentChannel()));
     }
 }

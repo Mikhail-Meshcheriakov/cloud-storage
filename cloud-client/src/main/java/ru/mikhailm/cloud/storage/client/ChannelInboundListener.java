@@ -14,5 +14,7 @@ public interface ChannelInboundListener {
 
     void authFail();
 
+    void registrationFail();
+
     void showDialog(String message);
 }

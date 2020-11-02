@@ -14,15 +14,18 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
     private State currentState = State.IDLE;
     private int length;
     private String login;
+    byte commandCode;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         ByteBuf buf = (ByteBuf) msg;
         while (buf.readableBytes() > 0) {
             if (currentState == State.IDLE) {
-                byte commandCode = buf.readByte();
-                if (commandCode == CommandCode.AUTHORIZATION) {
+                commandCode = buf.readByte();
+                if (commandCode == CommandCode.AUTHORIZATION || commandCode == CommandCode.REGISTRATION) {
                     currentState = State.LOGIN_LENGTH;
+                } else {
+                    System.out.println("ERROR: Invalid first byte - " + commandCode);
                 }
             }
 
@@ -56,18 +59,33 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
                     String password = new String(bytes, StandardCharsets.UTF_8);
 
                     //Получение данных из БД
+                    String user;
                     SqlClient.connect();
-                    String user = SqlClient.getUserLogin(login, password);
+                    if (commandCode == CommandCode.AUTHORIZATION) {
+                        System.out.println("login");
+                        user = SqlClient.getUserLogin(login, password);
+                    } else {
+                        System.out.println("registration");
+                        user = SqlClient.userRegistration(login, password);
+                    }
                     SqlClient.disconnect();
 
                     ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
                     if (user != null) {
-                        byteBuf.writeByte(CommandCode.AUTHORIZATION_SUCCESS);
+                        if (commandCode == CommandCode.AUTHORIZATION){
+                            byteBuf.writeByte(CommandCode.AUTHORIZATION_SUCCESS);
+                        } else {
+                            byteBuf.writeByte(CommandCode.REGISTRATION_SUCCESS);
+                        }
                         ctx.writeAndFlush(byteBuf);
                         ctx.pipeline().addLast(new ProtoHandler(user))
                                 .remove(this);
                     } else {
-                        byteBuf.writeByte(CommandCode.AUTHORIZATION_FAIL);
+                        if (commandCode == CommandCode.AUTHORIZATION){
+                            byteBuf.writeByte(CommandCode.AUTHORIZATION_FAIL);
+                        } else {
+                            byteBuf.writeByte(CommandCode.REGISTRATION_FAIL);
+                        }
                         ctx.writeAndFlush(byteBuf);
                     }
                     currentState = State.IDLE;

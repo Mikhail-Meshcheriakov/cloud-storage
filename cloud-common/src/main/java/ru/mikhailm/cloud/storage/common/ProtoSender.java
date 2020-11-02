@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class ProtoFileSender {
+public class ProtoSender {
     public static void sendFile(Path path, Channel channel, ChannelFutureListener finishListener) throws IOException {
         FileRegion region = new DefaultFileRegion(path.toFile(), 0, Files.size(path));
 
@@ -142,6 +142,34 @@ public class ProtoFileSender {
         //Отправка имени файла
         buf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
         buf.writeBytes(filenameBytes);
+        channel.writeAndFlush(buf);
+    }
+
+    public static void userRegistration(boolean registered, String login, String password, Channel channel) {
+        ByteBuf buf = ByteBufAllocator.DEFAULT.directBuffer(1);
+        if (registered) {
+            buf.writeByte(CommandCode.AUTHORIZATION);
+        } else {
+            buf.writeByte(CommandCode.REGISTRATION);
+        }
+        channel.write(buf);
+
+        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        byte[] bytes = login.getBytes(StandardCharsets.UTF_8);
+        buf.writeInt(bytes.length);
+        channel.write(buf);
+
+        buf = ByteBufAllocator.DEFAULT.directBuffer(bytes.length);
+        buf.writeBytes(bytes);
+        channel.write(buf);
+
+        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        bytes = password.getBytes(StandardCharsets.UTF_8);
+        buf.writeInt(bytes.length);
+        channel.write(buf);
+
+        buf = ByteBufAllocator.DEFAULT.directBuffer(bytes.length);
+        buf.writeBytes(bytes);
         channel.writeAndFlush(buf);
     }
 }

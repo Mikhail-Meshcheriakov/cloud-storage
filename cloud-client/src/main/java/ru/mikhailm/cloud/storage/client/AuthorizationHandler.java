@@ -23,7 +23,7 @@ public class AuthorizationHandler extends ChannelInboundHandlerAdapter {
             byte commandCode = buf.readByte();
 
             //При успешной авторизации добавляем в pipeline ProtoHandler и удаляем AuthorizationHandler
-            if (commandCode == CommandCode.AUTHORIZATION_SUCCESS) {
+            if (commandCode == CommandCode.AUTHORIZATION_SUCCESS || commandCode == CommandCode.REGISTRATION_SUCCESS) {
                 Platform.runLater(() -> {
                         listener.authSuccess();
                 });
@@ -42,6 +42,11 @@ public class AuthorizationHandler extends ChannelInboundHandlerAdapter {
 //                });
                 Platform.runLater(() -> {
                     listener.authFail();
+                });
+            }
+            if (commandCode == CommandCode.REGISTRATION_FAIL) {
+                Platform.runLater(() -> {
+                    listener.registrationFail();
                 });
             }
         }

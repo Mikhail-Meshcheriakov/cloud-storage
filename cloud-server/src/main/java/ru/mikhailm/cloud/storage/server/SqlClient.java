@@ -25,7 +25,7 @@ public class SqlClient {
     }
 
     synchronized static public String getUserLogin(String login, String password) {
-        String query = String.format("select login from users_tbl where login='%s' and password='%s'", login, password);
+        String query = String.format("SELECT login FROM users_tbl WHERE login='%s' AND password='%s'", login, password);
         try {
             ResultSet resultSet = statement.executeQuery(query);
             while (resultSet.next()) {
@@ -35,5 +35,18 @@ public class SqlClient {
             e.printStackTrace();
         }
         return null;
+    }
+
+    synchronized static public String userRegistration(String login, String password) {
+        if (getUserLogin(login, password) != null) {
+            return null;
+        }
+        String query = String.format("INSERT INTO users_tbl (login, password) VALUES ('%s', '%s')", login, password);
+        try {
+            statement.executeUpdate(query);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return login;
     }
 }
