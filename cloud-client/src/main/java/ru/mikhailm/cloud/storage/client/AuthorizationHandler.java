@@ -4,13 +4,10 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import javafx.application.Platform;
-import javafx.scene.control.Alert;
 import ru.mikhailm.cloud.storage.common.CommandCode;
 
-import java.io.IOException;
-
 public class AuthorizationHandler extends ChannelInboundHandlerAdapter {
-    ChannelInboundListener listener;
+    private final ChannelInboundListener listener;
 
     public AuthorizationHandler(ChannelInboundListener listener) {
         this.listener = listener;
@@ -24,30 +21,22 @@ public class AuthorizationHandler extends ChannelInboundHandlerAdapter {
 
             //При успешной авторизации добавляем в pipeline ProtoHandler и удаляем AuthorizationHandler
             if (commandCode == CommandCode.AUTHORIZATION_SUCCESS || commandCode == CommandCode.REGISTRATION_SUCCESS) {
-                Platform.runLater(() -> {
-                        listener.authSuccess();
-                });
+                Platform.runLater(listener::authSuccess);
+                if (commandCode == CommandCode.REGISTRATION_SUCCESS) {
+                    Platform.runLater(() -> listener.showDialog("Регистрация прошла успешно"));
+                } else {
+                    Platform.runLater(() -> listener.showDialog("Вход выполнен"));
+                }
                 ctx.pipeline().addLast(new ProtoHandler())
                         .remove(this);
             }
 
             //При неудачной авторизации сообщаем об этом пользователю
             if (commandCode == CommandCode.AUTHORIZATION_FAIL) {
-//                Platform.runLater(() -> {
-//                    Alert alert = new Alert(Alert.AlertType.WARNING);
-//                    alert.setTitle("");
-//                    alert.setHeaderText(null);
-//                    alert.setContentText("Неверный логин или пароль");
-//                    alert.show();
-//                });
-                Platform.runLater(() -> {
-                    listener.authFail();
-                });
+                Platform.runLater(listener::authFail);
             }
             if (commandCode == CommandCode.REGISTRATION_FAIL) {
-                Platform.runLater(() -> {
-                    listener.registrationFail();
-                });
+                Platform.runLater(listener::registrationFail);
             }
         }
     }

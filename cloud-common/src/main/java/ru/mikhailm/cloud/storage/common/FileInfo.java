@@ -9,7 +9,7 @@ public class FileInfo {
     public enum FileType {
         FILE("F"), DIRECTORY("D");
 
-        private String name;
+        private final String name;
 
         FileType(String name) {
             this.name = name;

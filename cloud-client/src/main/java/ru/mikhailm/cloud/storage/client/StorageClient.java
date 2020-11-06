@@ -7,21 +7,19 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 public class StorageClient extends Application {
-    private Stage primaryStage;
 
     @Override
     public void start(Stage primaryStage) throws Exception{
-        this.primaryStage = primaryStage;
         FXMLLoader loader = new FXMLLoader();
         loader.setLocation(getClass().getResource("/main.fxml"));
         Parent root = loader.load();
         MainController controller = loader.getController();
-        this.primaryStage.setTitle("Java Cloud Storage");
-        this.primaryStage.setScene(new Scene(root, 1280, 600));
-        this.primaryStage.setMinWidth(800);
-        this.primaryStage.setMinHeight(400);
-        this.primaryStage.setOnCloseRequest(event -> controller.exitAction());
-        this.primaryStage.show();
+        primaryStage.setTitle("Java Cloud Storage");
+        primaryStage.setScene(new Scene(root, 1280, 600));
+        primaryStage.setMinWidth(800);
+        primaryStage.setMinHeight(400);
+        primaryStage.setOnCloseRequest(event -> controller.exitAction());
+        primaryStage.show();
         controller.loginDialog("");
     }
 

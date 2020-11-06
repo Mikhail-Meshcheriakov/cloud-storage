@@ -2,7 +2,6 @@ package ru.mikhailm.cloud.storage.client;
 
 import ru.mikhailm.cloud.storage.common.FileInfo;
 
-import java.nio.file.Path;
 import java.util.List;
 
 public interface ChannelInboundListener {

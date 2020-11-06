@@ -14,12 +14,24 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
     private State currentState = State.IDLE;
     private int length;
     private String login;
-    byte commandCode;
+    private byte commandCode;
+    private boolean littleData;
+    private ByteBuf buf;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        ByteBuf buf = (ByteBuf) msg;
-        while (buf.readableBytes() > 0) {
+        if (!littleData) {
+            buf = (ByteBuf) msg;
+        } else if ((buf.capacity() - buf.writerIndex()) >= ((ByteBuf) msg).writerIndex()) {
+            buf.capacity(((ByteBuf) msg).writerIndex() + buf.capacity());
+            buf.writeBytes((ByteBuf) msg);
+        } else {
+            buf.writeBytes((ByteBuf) msg);
+        }
+
+        littleData = false;
+
+        while (buf.readableBytes() > 0 && !littleData) {
             if (currentState == State.IDLE) {
                 commandCode = buf.readByte();
                 if (commandCode == CommandCode.AUTHORIZATION || commandCode == CommandCode.REGISTRATION) {
@@ -33,6 +45,8 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
                 if (buf.readableBytes() >= 4) {
                     length = buf.readInt();
                     currentState = State.LOGIN;
+                } else {
+                    littleData = true;
                 }
             }
 
@@ -42,6 +56,8 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
                     buf.readBytes(bytes);
                     login = new String(bytes, StandardCharsets.UTF_8);
                     currentState = State.PASSWORD_LENGTH;
+                } else {
+                    littleData = true;
                 }
             }
 
@@ -49,6 +65,8 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
                 if (buf.readableBytes() >= 4) {
                     length = buf.readInt();
                     currentState = State.PASSWORD;
+                } else {
+                    littleData = true;
                 }
             }
 
@@ -89,6 +107,8 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
                         ctx.writeAndFlush(byteBuf);
                     }
                     currentState = State.IDLE;
+                } else {
+                    littleData = true;
                 }
             }
         }

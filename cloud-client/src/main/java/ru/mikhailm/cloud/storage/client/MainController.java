@@ -1,11 +1,6 @@
 package ru.mikhailm.cloud.storage.client;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
-import io.netty.channel.Channel;
 import javafx.application.Platform;
-import javafx.event.ActionEvent;
-import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
@@ -16,13 +11,10 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.StageStyle;
 import javafx.util.Pair;
-import ru.mikhailm.cloud.storage.common.CommandCode;
 import ru.mikhailm.cloud.storage.common.FileInfo;
 import ru.mikhailm.cloud.storage.common.ProtoSender;
 
-import java.awt.event.MouseEvent;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -45,6 +37,9 @@ public class MainController implements ChannelInboundListener {
 
         localPanelController = (PanelController) rightPanel.getProperties().get("ctrl");
         remotePanelController = (PanelController) leftPanel.getProperties().get("ctrl");
+
+        localPanelController.setMainController(this);
+        remotePanelController.setMainController(this);
 
         localPanelController.setIsRemote(false);
         localPanelController.setLocation("Local");
@@ -79,13 +74,11 @@ public class MainController implements ChannelInboundListener {
         dialog.setTitle("Login Dialog");
         dialog.initStyle(StageStyle.UTILITY);
 
-// Set the button types.
         ButtonType loginButtonType = new ButtonType("Вход", ButtonBar.ButtonData.OK_DONE);
         ButtonType registrationButtonType = new ButtonType("Регистрация", ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButtonType = new ButtonType("Отмена", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(loginButtonType, registrationButtonType, cancelButtonType);
 
-// Create the username and password labels and fields.
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
@@ -104,21 +97,15 @@ public class MainController implements ChannelInboundListener {
         grid.add(passwordField, 1, 1);
         grid.add(lblErrorNotification, 1, 2);
 
-// Enable/Disable login button depending on whether a username was entered.
         Node loginButton = dialog.getDialogPane().lookupButton(loginButtonType);
         loginButton.setDisable(true);
 
-// Do some validation (using the Java 8 lambda syntax).
-        textField.textProperty().addListener((observable, oldValue, newValue) -> {
-            loginButton.setDisable(newValue.trim().isEmpty());
-        });
+        textField.textProperty().addListener((observable, oldValue, newValue) -> loginButton.setDisable(newValue.trim().isEmpty()));
 
         dialog.getDialogPane().setContent(grid);
 
-// Request focus on the username field by default.
         Platform.runLater(textField::requestFocus);
 
-// Convert the result to a username-password-pair when the login button is clicked.
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == loginButtonType) {
                 return new Pair<>(textField.getText(), passwordField.getText());
@@ -138,7 +125,7 @@ public class MainController implements ChannelInboundListener {
 
         result.ifPresent(usernamePassword -> {
             System.out.println("userRegistration login");
-            if (usernamePassword.getKey() == null || usernamePassword.getValue() == null){
+            if (usernamePassword.getKey() == null || usernamePassword.getValue() == null) {
                 registrationDialog("");
                 dialog.close();
             } else {
@@ -152,12 +139,10 @@ public class MainController implements ChannelInboundListener {
         dialog.setTitle("Регистрация");
         dialog.initStyle(StageStyle.UTILITY);
 
-// Set the button types.
         ButtonType registrationButtonType = new ButtonType("Регистрация", ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButtonType = new ButtonType("Отмена", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(registrationButtonType, cancelButtonType);
 
-// Create the username and password labels and fields.
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
@@ -180,29 +165,19 @@ public class MainController implements ChannelInboundListener {
         grid.add(confirmPasswordField, 1, 2);
         grid.add(lblErrorNotification, 1, 3);
 
-// Enable/Disable login button depending on whether a username was entered.
         Node registrationButton = dialog.getDialogPane().lookupButton(registrationButtonType);
         registrationButton.setDisable(true);
 
-// Do some validation (using the Java 8 lambda syntax).
-        loginField.textProperty().addListener((observable, oldValue, newValue) -> {
-            registrationButton.setDisable(newValue.trim().isEmpty() || passwordField.getText().trim().isEmpty() || confirmPasswordField.getText().trim().isEmpty());
-        });
+        loginField.textProperty().addListener((observable, oldValue, newValue) -> registrationButton.setDisable(newValue.trim().isEmpty() || passwordField.getText().trim().isEmpty() || confirmPasswordField.getText().trim().isEmpty()));
 
-        passwordField.textProperty().addListener((observable, oldValue, newValue) -> {
-            registrationButton.setDisable(newValue.trim().isEmpty() || loginField.getText().trim().isEmpty() ||confirmPasswordField.getText().trim().isEmpty());
-        });
+        passwordField.textProperty().addListener((observable, oldValue, newValue) -> registrationButton.setDisable(newValue.trim().isEmpty() || loginField.getText().trim().isEmpty() || confirmPasswordField.getText().trim().isEmpty()));
 
-        confirmPasswordField.textProperty().addListener((observable, oldValue, newValue) -> {
-            registrationButton.setDisable(newValue.trim().isEmpty() || loginField.getText().trim().isEmpty() ||passwordField.getText().trim().isEmpty());
-        });
+        confirmPasswordField.textProperty().addListener((observable, oldValue, newValue) -> registrationButton.setDisable(newValue.trim().isEmpty() || loginField.getText().trim().isEmpty() || passwordField.getText().trim().isEmpty()));
 
         dialog.getDialogPane().setContent(grid);
 
-// Request focus on the username field by default.
         Platform.runLater(loginField::requestFocus);
 
-// Convert the result to a username-password-pair when the login button is clicked.
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == registrationButtonType) {
                 return new Pair<>(loginField.getText(), passwordField.getText());
@@ -227,42 +202,16 @@ public class MainController implements ChannelInboundListener {
         });
     }
 
-//    public void login(String login, String password) {
-//        Channel channel = Network.getInstance().getCurrentChannel();
-//
-//        ByteBuf buf = ByteBufAllocator.DEFAULT.directBuffer(1);
-//        buf.writeByte(CommandCode.AUTHORIZATION);
-//        channel.write(buf);
-//
-//        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
-//        byte[] bytes = login.getBytes(StandardCharsets.UTF_8);
-//        buf.writeInt(bytes.length);
-//        channel.write(buf);
-//
-//        buf = ByteBufAllocator.DEFAULT.directBuffer(bytes.length);
-//        buf.writeBytes(bytes);
-//        channel.write(buf);
-//
-//        buf = ByteBufAllocator.DEFAULT.directBuffer(4);
-//        bytes = password.getBytes(StandardCharsets.UTF_8);
-//        buf.writeInt(bytes.length);
-//        channel.write(buf);
-//
-//        buf = ByteBufAllocator.DEFAULT.directBuffer(bytes.length);
-//        buf.writeBytes(bytes);
-//        channel.writeAndFlush(buf);
-//    }
-
     @Override
     public void showDialog(String message) {
-        Dialog dialog = new Dialog();
+        Dialog<String> dialog = new Dialog<>();
         dialog.initStyle(StageStyle.UTILITY);
         dialog.setContentText(message);
         dialog.getDialogPane().getButtonTypes().add(ButtonType.OK);
         dialog.show();
     }
 
-    public void btnCopyFile(ActionEvent actionEvent) throws IOException {
+    public void btnCopyFile() {
         if (localPanelController.getSelectedFilename() == null && remotePanelController.getSelectedFilename() == null) {
             showDialog("Не выбран ни один файл");
         }
@@ -285,7 +234,7 @@ public class MainController implements ChannelInboundListener {
 
     }
 
-    public void btnRenameFile(ActionEvent actionEvent) {
+    public void btnRenameFile() {
         if (localPanelController.getSelectedFilename() == null && remotePanelController.getSelectedFilename() == null) {
             showDialog("Не выбран ни один файл");
         }
@@ -341,7 +290,7 @@ public class MainController implements ChannelInboundListener {
         }
     }
 
-    public void btnDeleteFile(ActionEvent actionEvent) {
+    public void btnDeleteFile() {
         if (localPanelController.getSelectedFilename() == null && remotePanelController.getSelectedFilename() == null) {
             showDialog("Не выбран ни один файл");
         }
@@ -380,6 +329,7 @@ public class MainController implements ChannelInboundListener {
     @Override
     public void updateRemoteList(List<FileInfo> files) {
         remotePanelController.updateRemoteList(files);
+        remotePanelController.getFilesTable().sort();
     }
 
     @Override
@@ -392,12 +342,12 @@ public class MainController implements ChannelInboundListener {
         Platform.exit();
     }
 
-    public void updateAllList(ActionEvent actionEvent) {
+    public void updateAllList() {
         ProtoSender.updateFileList(Network.getInstance().getCurrentChannel(), remotePanelController.getCurrentPath());
         localPanelController.updateLocalList(Paths.get(localPanelController.getCurrentPath()));
     }
 
-    public void createDirectory(ActionEvent actionEvent) {
+    public void createDirectory() {
         Dialog<String> dialog = new Dialog<>();
         dialog.initStyle(StageStyle.UTILITY);
 

@@ -4,7 +4,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import ru.mikhailm.cloud.storage.common.FileInfo;
 import ru.mikhailm.cloud.storage.common.ProtoSender;
 
 import java.io.BufferedOutputStream;
@@ -14,8 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import static ru.mikhailm.cloud.storage.common.CommandCode.*;
 
@@ -27,13 +24,14 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     private long receivedFileLength;
     private BufferedOutputStream out;
     private Path source;
-    private String userDirectory;
+    private final String userDirectory;
     private String currentDirectory;
-    boolean littleData;
-    ByteBuf buf;
+    private boolean littleData;
+    private ByteBuf buf;
 
     public ProtoHandler(String user) {
         userDirectory = Paths.get(".", "server_storage", user).toString();
+        currentDirectory = userDirectory;
 
         //Проверка каталога пользователя
         if (!Files.exists(Paths.get(".", "server_storage", user))) {
@@ -46,7 +44,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(ChannelHandlerContext ctx, Object msg) {
         if (!littleData) {
             buf = (ByteBuf) msg;
         } else if ((buf.capacity() - buf.writerIndex()) >= ((ByteBuf) msg).writerIndex()) {
@@ -85,7 +83,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                         System.out.println("STATE: File delete request");
                         break;
                     case CREATE_DIRECTORY:
-                        currentState = State.CREATE_DIRECTORY;
+                        currentState = State.REQUEST_CREATE_DIRECTORY;
                         System.out.println("STATE: Create directory request");
                     default:
                         System.out.println("ERROR: Invalid first byte - " + commandCode);
@@ -93,12 +91,21 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
             }
 
             if (currentState == State.FILE) {
-                file(ctx, buf);
+                try {
+                    fileAccept(ctx, buf);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    currentState.setNumberOperation(0);
+                    currentState = State.IDLE;
+                    ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
+                    byteBuf.writeByte(FILE_FAIL);
+                    ctx.writeAndFlush(byteBuf);
+                }
             }
 
             //Получаем длину имени файла
             if (currentState == State.REQUEST_FILE_DOWNLOAD) {
-                fileDownload(ctx, buf);
+                fileSend(ctx, buf);
             }
 
             if (currentState == State.REQUEST_FILE_RENAME) {
@@ -113,7 +120,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 sendFileList(ctx);
             }
 
-            if (currentState == State.CREATE_DIRECTORY) {
+            if (currentState == State.REQUEST_CREATE_DIRECTORY) {
                 createDirectory(ctx, buf);
             }
         }
@@ -123,7 +130,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void createDirectory(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+    private void createDirectory(ChannelHandlerContext ctx, ByteBuf buf) {
         if (currentState.getNumberOperation() == 0) {
             if (buf.readableBytes() >= 4) {
                 nextLength = buf.readInt();
@@ -135,19 +142,28 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
 
         if (currentState.getNumberOperation() == 1) {
             if (buf.readableBytes() >= nextLength) {
+                ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
                 byte[] fileName = new byte[nextLength];
                 buf.readBytes(fileName);
-                Files.createDirectory(Paths.get(currentDirectory, new String(fileName, StandardCharsets.UTF_8)));
+                try {
+                    Files.createDirectory(Paths.get(currentDirectory, new String(fileName, StandardCharsets.UTF_8)));
+                    byteBuf.writeByte(CREATE_DIRECTORY_SUCCESS);
+                    ctx.writeAndFlush(byteBuf);
+                    ProtoSender.sendFileList(currentDirectory, ctx.channel());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    byteBuf.writeByte(CREATE_DIRECTORY_FAIL);
+                    ctx.writeAndFlush(byteBuf);
+                }
                 currentState.setNumberOperation(0);
                 currentState = State.IDLE;
-                sendFileList(ctx);
             } else {
                 littleData = true;
             }
         }
     }
 
-    private void fileDelete(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+    private void fileDelete(ChannelHandlerContext ctx, ByteBuf buf) {
         if (currentState.getNumberOperation() == 0) {
             if (buf.readableBytes() >= 4) {
                 nextLength = buf.readInt();
@@ -159,19 +175,28 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
 
         if (currentState.getNumberOperation() == 1) {
             if (buf.readableBytes() >= nextLength) {
+                ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
                 byte[] fileName = new byte[nextLength];
                 buf.readBytes(fileName);
-                Files.deleteIfExists(Paths.get(currentDirectory, new String(fileName, StandardCharsets.UTF_8)));
+                try {
+                    Files.deleteIfExists(Paths.get(currentDirectory, new String(fileName, StandardCharsets.UTF_8)));
+                    byteBuf.writeByte(FILE_DELETE_SUCCESS);
+                    ctx.writeAndFlush(byteBuf);
+                    ProtoSender.sendFileList(currentDirectory, ctx.channel());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    byteBuf.writeByte(FILE_DELETE_FAIL);
+                    ctx.writeAndFlush(byteBuf);
+                }
                 currentState.setNumberOperation(0);
                 currentState = State.IDLE;
-                sendFileList(ctx);
             } else {
                 littleData = true;
             }
         }
     }
 
-    private void fileRename(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+    private void fileRename(ChannelHandlerContext ctx, ByteBuf buf) {
 
         if (currentState.getNumberOperation() == 0) {
             if (buf.readableBytes() >= 4) {
@@ -204,20 +229,29 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
 
         if (currentState.getNumberOperation() == 3) {
             if (buf.readableBytes() >= nextLength) {
+                ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
                 byte[] fileName = new byte[nextLength];
                 buf.readBytes(fileName);
                 String newName = new String(fileName, StandardCharsets.UTF_8);
-                Files.move(source, source.resolveSibling(newName));
+                try {
+                    Files.move(source, source.resolveSibling(newName));
+                    byteBuf.writeByte(FILE_RENAME_SUCCESS);
+                    ctx.writeAndFlush(byteBuf);
+                    ProtoSender.sendFileList(currentDirectory, ctx.channel());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    byteBuf.writeByte(FILE_RENAME_FAIL);
+                    ctx.writeAndFlush(byteBuf);
+                }
                 currentState.setNumberOperation(0);
                 currentState = State.IDLE;
-                sendFileList(ctx);
             } else {
                 littleData = true;
             }
         }
     }
 
-    private void fileDownload(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+    private void fileSend(ChannelHandlerContext ctx, ByteBuf buf) {
         if (currentState.getNumberOperation() == 0) {
             if (buf.readableBytes() >= 4) {
                 nextLength = buf.readInt();
@@ -247,7 +281,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void file(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+    private void fileAccept(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
         if (currentState.getNumberOperation() == 0) {
             if (buf.readableBytes() >= 4) {
                 System.out.println("STATE: Get filename length");
@@ -264,10 +298,10 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 buf.readBytes(fileName);
                 System.out.println("STATE: Filename received - " + new String(fileName, StandardCharsets.UTF_8));
                 out = new BufferedOutputStream(new FileOutputStream(currentDirectory + "\\" + new String(fileName)));
-                currentState.setNumberOperation(2);
-            } else {
-                littleData = true;
             }
+            currentState.setNumberOperation(2);
+        } else {
+            littleData = true;
         }
 
         if (currentState.getNumberOperation() == 2) {
@@ -279,7 +313,7 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                     currentState = State.IDLE;
                     System.out.println("File received");
                     out.close();
-                    sendFileList(ctx);
+                    ProtoSender.sendFileList(currentDirectory, ctx.channel());
                 } else {
                     currentState.setNumberOperation(3);
                 }
@@ -304,15 +338,16 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                     byteBuf.writeByte(FILE_SUCCESS);
                     ctx.writeAndFlush(byteBuf);
 
-                    sendFileList(ctx);  //После завершения загрузки файла отправля обновленный список файлов на клиент
+                    ProtoSender.sendFileList(currentDirectory, ctx.channel());  //После завершения загрузки файла отправля обновленный список файлов на клиент
                     break;
                 }
             }
         }
+
     }
 
     //Метод для отправки списка файлов на клиент
-    private void sendFileList(ChannelHandlerContext ctx) throws IOException {
+    private void sendFileList(ChannelHandlerContext ctx) {
         if (currentState.getNumberOperation() == 0) {
             if (buf.readableBytes() >= 4) {
                 nextLength = buf.readInt();
@@ -327,58 +362,12 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                 byte[] directory = new byte[nextLength];
                 buf.readBytes(directory);
                 currentDirectory = Paths.get(userDirectory, new String(directory, StandardCharsets.UTF_8)).toString();
+                ProtoSender.sendFileList(currentDirectory, ctx.channel());
                 currentState.setNumberOperation(0);
                 currentState = State.IDLE;
             } else {
                 littleData = true;
             }
-        }
-
-        System.out.println(currentDirectory);
-        List<FileInfo> files = Files.list(Paths.get(currentDirectory))
-                .map(FileInfo::new)
-                .collect(Collectors.toList());
-
-        //Отправляем сигнальный байт с кодом команды
-        ByteBuf outBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
-        outBuf.writeByte(FILE_LIST);
-        ctx.write(outBuf);
-
-        //Отправляем количество файлов в списке
-        outBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
-        outBuf.writeInt(files.size());
-        System.out.println("FILE_LIST: количество файлов " + files.size());
-        ctx.writeAndFlush(outBuf);
-
-        if (files.size() == 0) return;
-
-        //Проходимся по всем файлам и отправляем длину имени, имя и размер файла
-        for (FileInfo file : files) {
-            outBuf = ByteBufAllocator.DEFAULT.directBuffer(1);
-            if (file.getType() == FileInfo.FileType.FILE) {
-                outBuf.writeByte(0);
-                System.out.println("FILE_LIST: файл");
-            } else {
-                outBuf.writeByte(1);
-                System.out.println("FILE_LIST: директория");
-            }
-            ctx.write(outBuf);
-
-            byte[] filenameBytes = file.getName().getBytes(StandardCharsets.UTF_8);
-            outBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
-            outBuf.writeInt(filenameBytes.length);
-            System.out.println("FILE_LIST: длина имени файла " + filenameBytes.length);
-            ctx.write(outBuf);
-
-            outBuf = ByteBufAllocator.DEFAULT.directBuffer(filenameBytes.length);
-            outBuf.writeBytes(filenameBytes);
-            System.out.println("FILE_LIST: имя файла " + new String(filenameBytes));
-            ctx.write(outBuf);
-
-            outBuf = ByteBufAllocator.DEFAULT.directBuffer(8);
-            outBuf.writeLong(file.getSize());
-            System.out.println("FILE_LIST: размер файла " + file.getSize());
-            ctx.writeAndFlush(outBuf);
         }
     }
 

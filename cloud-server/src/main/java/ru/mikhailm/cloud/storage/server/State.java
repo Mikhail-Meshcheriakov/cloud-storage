@@ -11,7 +11,7 @@ public enum State {
     PASSWORD,
     REQUEST_FILE_RENAME,
     REQUEST_FILE_DELETE,
-    CREATE_DIRECTORY;
+    REQUEST_CREATE_DIRECTORY;
 
     private int numberOperation;
 

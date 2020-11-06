@@ -28,9 +28,7 @@ public class SqlClient {
         String query = String.format("SELECT login FROM users_tbl WHERE login='%s' AND password='%s'", login, password);
         try {
             ResultSet resultSet = statement.executeQuery(query);
-            while (resultSet.next()) {
-                return resultSet.getString(1);
-            }
+            return resultSet.getString(1);
         } catch (SQLException e) {
             e.printStackTrace();
         }

@@ -33,6 +33,12 @@ public class PanelController {
 
     private String location;
 
+    private MainController mainController;
+
+    public void setMainController(MainController mainController) {
+        this.mainController = mainController;
+    }
+
     public TableView<FileInfo> getFilesTable() {
         return filesTable;
     }
@@ -81,6 +87,7 @@ public class PanelController {
 
         filesTable.getColumns().addAll(fileTypeColumn, filenameColumn, fileSizeColumn);
         filesTable.getSortOrder().add(fileTypeColumn);
+        filesTable.setPlaceholder(new Label("Каталог пуст"));
 
         disksBox.getItems().clear();
         if (isRemote) {
@@ -93,26 +100,12 @@ public class PanelController {
         }
         disksBox.getSelectionModel().select(0);
 
-//        filesTable.setOnMouseClicked(new EventHandler<MouseEvent>() {
-//            @Override
-//            public void handle(MouseEvent event) {
-//                if (event.getClickCount() == 2) {
-//                    if (filesTable.getSelectionModel().getSelectedItem() != null) {
-//                        Path path = Paths.get(pathField.getText()).resolve(filesTable.getSelectionModel().getSelectedItem().getName());
-//                        if (Files.isDirectory(path)) {
-//                            updateLocalList(path);
-//                        }
-//                    }
-//                }
-//            }
-//        });
-
         if (!isRemote) {
             updateLocalList(Paths.get("."));
         }
     }
 
-    public void btnPathUpAction(ActionEvent actionEvent) {
+    public void btnPathUpAction() {
         if (!isRemote) {
             Path upperPath = Paths.get(pathField.getText()).getParent();
             if (upperPath != null) {
@@ -142,8 +135,7 @@ public class PanelController {
             filesTable.getItems().addAll(Files.list(path).map(FileInfo::new).collect(Collectors.toList()));
             filesTable.sort();
         } catch (IOException e) {
-            Alert alert = new Alert(Alert.AlertType.WARNING, "По какой-то причине не удалось обновить список файлов", ButtonType.OK);
-            alert.showAndWait();
+            mainController.showDialog("Не удалось обновить список файлов");
         }
     }
 

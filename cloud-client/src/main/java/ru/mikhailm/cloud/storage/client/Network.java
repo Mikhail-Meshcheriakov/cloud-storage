@@ -13,7 +13,7 @@ import java.net.InetSocketAddress;
 
 public class Network {
 
-    private static Network ourInstance = new Network();
+    private static final Network ourInstance = new Network();
 
     public static Network getInstance() {
         return ourInstance;

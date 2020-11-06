@@ -41,10 +41,10 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
     private int countFiles;
     private int counter;
     private byte[] fileName;
-    ChannelInboundListener listener;
-    boolean littleData;
-    ByteBuf buf;
-    FileInfo.FileType fileType;
+    private ChannelInboundListener listener;
+    private boolean littleData;
+    private ByteBuf buf;
+    private FileInfo.FileType fileType;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -74,9 +74,28 @@ public class ProtoHandler extends ChannelInboundHandlerAdapter {
                         System.out.println("STATE: File list request");
                         break;
                     case CommandCode.FILE_SUCCESS:
-                        Platform.runLater(() -> {
-                            listener.showDialog("Файл успешно загружен");
-                        });
+                        Platform.runLater(() -> listener.showDialog("Файл успешно загружен"));
+                        break;
+                    case CommandCode.FILE_FAIL:
+                        Platform.runLater(() -> listener.showDialog("Произошла ошибка при скачивании файла"));
+                        break;
+                    case CommandCode.CREATE_DIRECTORY_SUCCESS:
+                        Platform.runLater(() -> listener.showDialog("Каталог успешно создан"));
+                        break;
+                    case CommandCode.CREATE_DIRECTORY_FAIL:
+                        Platform.runLater(() -> listener.showDialog("Произошла ошибка при сщздании каталога"));
+                        break;
+                    case CommandCode.FILE_DELETE_SUCCESS:
+                        Platform.runLater(() -> listener.showDialog("Файл успешно удален"));
+                        break;
+                    case CommandCode.FILE_DELETE_FAIL:
+                        Platform.runLater(() -> listener.showDialog("Произошла ошибка при удалении файла"));
+                        break;
+                    case CommandCode.FILE_RENAME_SUCCESS:
+                        Platform.runLater(() -> listener.showDialog("Файл успешно переименован"));
+                        break;
+                    case CommandCode.FILE_RENAME_FAIL:
+                        Platform.runLater(() -> listener.showDialog("Произошла ошибка при переименовании файла"));
                         break;
                     default:
                         System.out.println("ERROR: Invalid first byte - " + commandCode);
