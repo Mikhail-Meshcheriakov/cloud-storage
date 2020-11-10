@@ -216,7 +216,7 @@ public class MainController implements ChannelInboundListener {
             showDialog("Не выбран ни один файл");
         }
 
-        if (localPanelController.getSelectedFilename() != null) {
+        if (localPanelController.getSelectedFilename() != null && localPanelController.getFilesTable().getSelectionModel().getSelectedItem().getType() != FileInfo.FileType.DIRECTORY) {
             ProtoSender.sendFile(Paths.get(localPanelController.getCurrentPath(), localPanelController.getSelectedFilename()), Network.getInstance().getCurrentChannel(), future -> {
                 if (!future.isSuccess()) {
                     future.cause().printStackTrace();
@@ -227,7 +227,7 @@ public class MainController implements ChannelInboundListener {
             });
         }
 
-        if (remotePanelController.getSelectedFilename() != null) {
+        if (remotePanelController.getSelectedFilename() != null && remotePanelController.getFilesTable().getSelectionModel().getSelectedItem().getType() != FileInfo.FileType.DIRECTORY) {
             currentLocalDirectory = localPanelController.getCurrentPath();
             ProtoSender.sendRequestFileDownload(remotePanelController.getSelectedFilename(), Network.getInstance().getCurrentChannel());
         }
